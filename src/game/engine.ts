@@ -135,6 +135,15 @@ export function createNewGame(characterId: string): GameState {
       wellbeing: 12,
       growth: 0,
     },
+    monthStartResources: {
+      hours: 160,
+      competence: 4,
+      reputation: 2,
+      network: 2,
+      fee: 10,
+      wellbeing: 12,
+      growth: 0,
+    },
     paths: emptyPaths(),
     growthBanked: 0,
     slotted: [habit, ...(spec ? [spec] : [])].slice(0, GRADES[grade].slots),
@@ -261,8 +270,122 @@ function cardBonus(state: GameState, action: ActionDef): Partial<Resources> {
 }
 
 export function canAfford(state: GameState, action: ActionDef): boolean {
-  if (action.hours < 0) return true // overtime adds hours
+  if (action.hours < 0) return true // legacy: negative hours add capacity
   return state.resources.hours >= action.hours
+}
+
+/** Civ-style yield preview for one selection of an action (includes slotted card bonuses). */
+export function actionYieldPreview(
+  state: GameState,
+  action: ActionDef,
+): {
+  hoursDelta: number
+  resources: Partial<Record<keyof Resources, number>>
+  projectProgress: number
+  pathLean: PathId[]
+  reviewHint?: string
+} {
+  const burnout = state.burnoutTurns > 0
+  const bonus = cardBonus(state, action)
+  const resources: Partial<Record<keyof Resources, number>> = {}
+  const keys: (keyof Resources)[] = [
+    'competence',
+    'reputation',
+    'network',
+    'fee',
+    'wellbeing',
+    'growth',
+  ]
+  for (const key of keys) {
+    const base = (action.effects[key as keyof typeof action.effects] as number | undefined) ?? 0
+    const extra = bonus[key] ?? 0
+    let total = base + extra
+    if (!total) continue
+    if (burnout && key !== 'wellbeing' && key !== 'hours') total = Math.round(total * 0.5 * 10) / 10
+    resources[key] = total
+  }
+
+  const pathLean: PathId[] = []
+  const tags = new Set(action.tags)
+  if (tags.has('delivery') || tags.has('tender') || tags.has('commercial')) pathLean.push('delivery')
+  if (tags.has('technical') || tags.has('detailed') || tags.has('software')) pathLean.push('technical')
+  if (tags.has('collaboration') || tags.has('coordination') || tags.has('network')) {
+    pathLean.push('collaboration')
+  }
+  if (tags.has('leadership') || tags.has('feedback')) pathLean.push('leadership')
+
+  let reviewHint: string | undefined
+  if (action.id === 'unutilized') {
+    reviewHint =
+      'Yields while idle: Fee & Wellbeing fall; Competence, Reputation, Network, Growth earn nothing. Delivery path −1 per block at Review.'
+  }
+
+  return {
+    hoursDelta: -action.hours,
+    resources,
+    projectProgress: action.effects.projectProgress ?? 0,
+    pathLean,
+    reviewHint,
+  }
+}
+
+export function timesUsedThisMonth(state: GameState, actionId: string): number {
+  return state.actionsThisMonth.filter((id) => id === actionId).length
+}
+
+/** Month-to-date yield deltas vs the start-of-month snapshot (always includes every yield, even +0). */
+export function monthPlanYieldDeltas(state: GameState): Record<keyof Resources, number> {
+  const start = state.monthStartResources ?? state.resources
+  const keys: (keyof Resources)[] = [
+    'hours',
+    'competence',
+    'reputation',
+    'network',
+    'fee',
+    'wellbeing',
+    'growth',
+  ]
+  const out = {} as Record<keyof Resources, number>
+  for (const key of keys) {
+    out[key] = Math.round((state.resources[key] - start[key]) * 10) / 10
+  }
+  return out
+}
+
+/** Evidence counts this review cycle — what feeds each promotion path. */
+export function pathActionEvidence(state: GameState): Record<PathId, { label: string; count: number }[]> {
+  const counts = state.actionsThisReview.reduce<Record<string, number>>((acc, id) => {
+    acc[id] = (acc[id] ?? 0) + 1
+    return acc
+  }, {})
+  const n = (id: string) => counts[id] ?? 0
+  return {
+    delivery: [
+      { label: 'Issue drawings', count: n('drawing-set') },
+      { label: 'Design review', count: n('design-review') },
+      { label: 'Timesheets', count: n('timesheets') },
+      { label: 'Unutilized (−8h)', count: n('unutilized') },
+    ].filter((x) => x.count > 0),
+    technical: [
+      { label: 'Calc package', count: n('calc-package') },
+      { label: 'Model layouts', count: n('model-layouts') },
+      { label: 'Automate', count: n('automate') },
+      { label: 'CPD', count: n('cpd-friday') },
+      { label: 'Learn Revit', count: n('learn-revit') },
+    ].filter((x) => x.count > 0),
+    collaboration: [
+      { label: 'Work Across', count: n('work-across') },
+      { label: 'Client meeting', count: n('client-meeting') },
+      { label: 'Clash cycle', count: n('clash-cycle') },
+      { label: 'Lunch & Learn', count: n('lunch-learn') },
+      { label: 'Site visit', count: n('site-visit') },
+    ].filter((x) => x.count > 0),
+    leadership: [
+      { label: 'Ask Up', count: n('ask-mentor') },
+      { label: 'Support Down', count: n('mentor-junior') },
+      { label: 'CPD', count: n('cpd-friday') },
+    ].filter((x) => x.count > 0),
+  }
 }
 
 export function performAction(state: GameState, actionId: string): GameState {
@@ -339,7 +462,16 @@ export function performAction(state: GameState, actionId: string): GameState {
 
   next.actionsThisMonth.push(actionId)
   next.actionsThisReview.push(actionId)
-  pushLog(next, `Did: ${action.name}`, 'neutral')
+  const uses = next.actionsThisMonth.filter((id) => id === actionId).length
+  if (action.id === 'unutilized') {
+    pushLog(
+      next,
+      `Unutilized ×${uses}: yields −8 Hours, −1 Fee, −1 Wellbeing; Competence/Reputation/Network/Growth unchanged. Delivery path −1 at Review.`,
+      'warn',
+    )
+  } else {
+    pushLog(next, `Did: ${action.name}${uses > 1 ? ` (×${uses} this month)` : ''}`, 'neutral')
+  }
 
   if (next.resources.wellbeing <= 0 && next.burnoutTurns <= 0) {
     next.burnoutTurns = 6
@@ -353,6 +485,24 @@ export function endMonth(state: GameState): GameState {
   const next = clone(state)
   if (next.screen !== 'desk' || next.ended) return state
 
+  // leftover hours are still idle — nudge the player; yields need explicit Unutilized blocks
+  const leftover = next.resources.hours
+  const idleBlocks = next.actionsThisMonth.filter((id) => id === 'unutilized').length
+  if (leftover >= 8) {
+    const suggested = Math.floor(leftover / 8)
+    pushLog(
+      next,
+      `${leftover}h left unspent. Log Unutilized (−8h) ${suggested}× next time — idle yields: −Fee, −Wellbeing now; flat Competence/Reputation/Network/Growth; Delivery path −1 each at Review.`,
+      'warn',
+    )
+  } else if (idleBlocks >= 3) {
+    pushLog(
+      next,
+      `Heavy idle month (${idleBlocks} unutilized blocks). Fee/Wellbeing yields took the hit; Delivery path will too at Review.`,
+      'warn',
+    )
+  }
+
   // passive founding charter CPD if diarised
   if (next.actionsThisMonth.includes('cpd-friday')) {
     applyResource(next.resources, 'growth', 1, next.burnoutTurns > 0)
@@ -362,6 +512,7 @@ export function endMonth(state: GameState): GameState {
   next.turn += 1
   next.actionsThisMonth = []
   next.resources.hours = 160
+  next.monthStartResources = clone(next.resources)
   if (next.burnoutTurns > 0) next.burnoutTurns -= 1
 
   // wellbeing drift
@@ -566,6 +717,16 @@ export function beginReview(state: GameState): GameState {
   const gradeDef = GRADES[next.grade]
   for (const m of gradeDef.milestones) {
     if (next.milestonesHit.includes(m.id)) delta[m.path] += 1
+  }
+
+  // Unutilized time: each −8h idle block this cycle costs −1 Delivery path
+  // (no billable output). Yield hits (−1 Fee, −1 Wellbeing; other yields flat) already applied on select.
+  const idleBlocks = actionCounts['unutilized'] ?? 0
+  if (idleBlocks > 0) {
+    delta.delivery -= idleBlocks
+    notes.push(
+      `Unutilized ×${idleBlocks}: yields already logged (−Fee/−Wellbeing per block; Competence/Reputation/Network/Growth earned nothing). Delivery path −${idleBlocks} this Review.`,
+    )
   }
 
   // round down / apply
@@ -836,7 +997,11 @@ export function loadGame(): GameState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as GameState
+    const state = JSON.parse(raw) as GameState
+    if (!state.monthStartResources) {
+      state.monthStartResources = clone(state.resources)
+    }
+    return state
   } catch {
     return null
   }

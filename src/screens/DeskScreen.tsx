@@ -1,10 +1,20 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { ActionYields } from '../components/ActionYields'
 import { CARD_BY_ID } from '../data/cards'
 import { GRADES } from '../data/grades'
-import type { GameState } from '../data/types'
-import { PathBars } from '../components/PathBars'
+import type { GameState, Resources } from '../data/types'
+import { FoundingCharter } from '../components/FoundingCharter'
+import { PathExplain } from '../components/PathExplain'
 import { YieldStrip } from '../components/YieldStrip'
-import { canAfford, monthActions, slotCount } from '../game/engine'
+import {
+  actionYieldPreview,
+  canAfford,
+  monthActions,
+  monthPlanYieldDeltas,
+  slotCount,
+  timesUsedThisMonth,
+} from '../game/engine'
 
 export function DeskScreen({
   state,
@@ -21,16 +31,27 @@ export function DeskScreen({
   const grade = GRADES[state.grade]
   const project = state.projects[0]
   const slots = slotCount(state)
+  const monthPlan = monthPlanYieldDeltas(state)
+  const [hoverPreview, setHoverPreview] = useState<Partial<Record<keyof Resources, number>> | null>(
+    null,
+  )
 
   return (
     <section className="screen stack">
-      <YieldStrip resources={state.resources} burnout={state.burnoutTurns > 0} />
+      <YieldStrip
+        resources={state.resources}
+        burnout={state.burnoutTurns > 0}
+        monthPlan={monthPlan}
+        hoverPreview={hoverPreview}
+      />
 
       {!state.tipSeen && (
         <div className="tip" style={{ color: 'var(--paper)' }}>
-          <strong>How a month works:</strong> spend Hours on actions, keep at least one Habit and one
-          Specialism slotted, then End month. Every sixth month is a Review that scores your four
-          paths.
+          <strong>How a month works:</strong> every action is one −8h block — press again to stack
+          more (e.g. five calc blocks ≈ a full package). The top strip shows banked +/− for the
+          month under each yield. Overtime means you are overloaded: log it, then Ask Up for
+          support. Leftover hours? Log <em>Unutilized time</em> (−8h): Fee and Wellbeing yields
+          fall; Competence, Reputation, Network, and Growth earn nothing.
           <div style={{ marginTop: '0.6rem' }}>
             <button className="btn btn-primary" onClick={onDismissTip}>
               Got it
@@ -54,25 +75,47 @@ export function DeskScreen({
           </div>
 
           <div className="stack">
-            {actions.map((action, i) => (
-              <motion.button
-                key={action.id}
-                className="action-row"
-                disabled={!canAfford(state, action)}
-                onClick={() => onAction(action.id)}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i * 0.03, 0.3) }}
-              >
-                <div>
-                  <div className="action-title">{action.name}</div>
-                  <div className="action-blurb">{action.blurb}</div>
-                </div>
-                <div className="hours-pill">
-                  {action.hours < 0 ? `+${Math.abs(action.hours)}h` : `−${action.hours}h`}
-                </div>
-              </motion.button>
-            ))}
+            {actions.map((action, i) => {
+              const used = timesUsedThisMonth(state, action.id)
+              const affordable = canAfford(state, action)
+              return (
+                <motion.button
+                  key={action.id}
+                  className={`action-row${used > 0 ? ' action-row-used' : ''}`}
+                  disabled={!affordable}
+                  onClick={() => onAction(action.id)}
+                  onMouseEnter={() => {
+                    const p = actionYieldPreview(state, action)
+                    setHoverPreview({ hours: p.hoursDelta, ...p.resources })
+                  }}
+                  onMouseLeave={() => setHoverPreview(null)}
+                  onFocus={() => {
+                    const p = actionYieldPreview(state, action)
+                    setHoverPreview({ hours: p.hoursDelta, ...p.resources })
+                  }}
+                  onBlur={() => setHoverPreview(null)}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                >
+                  <div>
+                    <div className="action-title-row">
+                      <div className="action-title">{action.name}</div>
+                      {used > 0 && (
+                        <span className="action-count" title="Times selected this month">
+                          ×{used}
+                        </span>
+                      )}
+                    </div>
+                    <div className="action-blurb">{action.blurb}</div>
+                    <ActionYields state={state} action={action} />
+                  </div>
+                  <div className="hours-pill">
+                    {action.hours < 0 ? `+${Math.abs(action.hours)}h` : `−${action.hours}h`}
+                  </div>
+                </motion.button>
+              )
+            })}
           </div>
 
           <div style={{ marginTop: '1rem', display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
@@ -81,6 +124,9 @@ export function DeskScreen({
             </button>
             <span className="muted" style={{ alignSelf: 'center', fontSize: '0.88rem' }}>
               Next review in {6 - ((state.monthInGrade - 1) % 6)} month(s)
+              {state.resources.hours >= 8
+                ? ` · ${Math.floor(state.resources.hours / 8)} unutilized block(s) still available`
+                : ''}
             </span>
           </div>
         </div>
@@ -103,7 +149,8 @@ export function DeskScreen({
               {project?.progress}% complete
             </div>
             <p style={{ fontSize: '0.9rem', color: 'var(--steel)' }}>
-              Impact band: {Object.entries(grade.impact)
+              Impact band:{' '}
+              {Object.entries(grade.impact)
                 .filter(([, v]) => v === 'high')
                 .map(([k]) => k)
                 .join(', ') || 'learning'}{' '}
@@ -132,16 +179,14 @@ export function DeskScreen({
               })}
               {!state.slotted.length && <div className="muted">No cards slotted.</div>}
             </div>
-            <p className="tip" style={{ marginTop: '0.85rem', color: 'var(--ink)' }}>
-              Founding Charter: Second Pair of Eyes is always on — QA before issue, CPD stays live.
-            </p>
           </div>
 
           <div className="panel" style={{ padding: '1.1rem' }}>
-            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
-              Promotion paths
-            </p>
-            <PathBars paths={state.paths} grade={state.grade} compact />
+            <FoundingCharter />
+          </div>
+
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <PathExplain state={state} />
           </div>
 
           <div className="panel-dark" style={{ padding: '1.1rem' }}>

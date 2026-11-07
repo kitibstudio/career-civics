@@ -203,6 +203,8 @@ export interface GameState {
   turn: number
   monthInGrade: number
   resources: Resources
+  /** Yield snapshot at the start of the current month — strip shows plan deltas vs this. */
+  monthStartResources: Resources
   paths: PathScores
   growthBanked: number
   slotted: string[]
