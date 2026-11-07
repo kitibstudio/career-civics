@@ -46,11 +46,11 @@ export function DeskScreen({
 
       {!state.tipSeen && (
         <div className="tip" style={{ color: 'var(--paper)' }}>
-          <strong>How a month works:</strong> stack actions into your 160 Hours — the same card can be
-          taken more than once. Each choice lists +/− on every yield; the top strip updates as you
-          plan and highlights the next pick on hover. Leftover hours? Log <em>Unutilized time</em>{' '}
-          (−8h): Fee and Wellbeing yields fall; Competence, Reputation, Network, and Growth earn
-          nothing.
+          <strong>How a month works:</strong> every action is one −8h block — press again to stack
+          more (e.g. five calc blocks ≈ a full package). The top strip shows banked +/− for the
+          month under each yield. Overtime means you are overloaded: log it, then Ask Up for
+          support. Leftover hours? Log <em>Unutilized time</em> (−8h): Fee and Wellbeing yields
+          fall; Competence, Reputation, Network, and Growth earn nothing.
           <div style={{ marginTop: '0.6rem' }}>
             <button className="btn btn-primary" onClick={onDismissTip}>
               Got it

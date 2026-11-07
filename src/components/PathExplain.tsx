@@ -34,8 +34,8 @@ export function PathExplain({ state }: { state: GameState }) {
           yields, plus milestones — not a live bar when you click.
         </p>
         <p className="muted" style={{ fontSize: '0.85rem' }}>
-          Gate this grade: reach M1 ({cfg.m1}) on every path and M2 ({cfg.m2}) on at least{' '}
-          {cfg.gateStrong}; Golden is {cfg.golden}.
+          What good looks like this grade: M1 ≥{cfg.m1} on every path, M2 ≥{cfg.m2} on at least{' '}
+          {cfg.gateStrong} path(s); Golden ≥{cfg.golden}. Markers on the bars show those targets.
         </p>
 
         <ul className="path-how-list">

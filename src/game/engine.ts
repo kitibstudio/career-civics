@@ -270,7 +270,7 @@ function cardBonus(state: GameState, action: ActionDef): Partial<Resources> {
 }
 
 export function canAfford(state: GameState, action: ActionDef): boolean {
-  if (action.hours < 0) return true // overtime adds hours
+  if (action.hours < 0) return true // legacy: negative hours add capacity
   return state.resources.hours >= action.hours
 }
 
@@ -333,10 +333,8 @@ export function timesUsedThisMonth(state: GameState, actionId: string): number {
   return state.actionsThisMonth.filter((id) => id === actionId).length
 }
 
-/** Month-to-date yield deltas vs the start-of-month snapshot (live plan as actions stack). */
-export function monthPlanYieldDeltas(
-  state: GameState,
-): Partial<Record<keyof Resources, number>> {
+/** Month-to-date yield deltas vs the start-of-month snapshot (always includes every yield, even +0). */
+export function monthPlanYieldDeltas(state: GameState): Record<keyof Resources, number> {
   const start = state.monthStartResources ?? state.resources
   const keys: (keyof Resources)[] = [
     'hours',
@@ -347,10 +345,9 @@ export function monthPlanYieldDeltas(
     'wellbeing',
     'growth',
   ]
-  const out: Partial<Record<keyof Resources, number>> = {}
+  const out = {} as Record<keyof Resources, number>
   for (const key of keys) {
-    const d = Math.round((state.resources[key] - start[key]) * 10) / 10
-    if (d !== 0) out[key] = d
+    out[key] = Math.round((state.resources[key] - start[key]) * 10) / 10
   }
   return out
 }
