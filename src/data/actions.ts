@@ -202,6 +202,18 @@ export const ACTIONS: ActionDef[] = [
     },
   },
   {
+    id: 'unutilized',
+    name: 'Unutilized time',
+    blurb:
+      'Eight idle hours — no package, no conversation. Select once per leftover block (e.g. 24h idle = three times).',
+    hours: 8,
+    tags: ['idle'],
+    effects: {
+      fee: -1,
+      wellbeing: -1,
+    },
+  },
+  {
     id: 'leave',
     name: 'Take leave',
     blurb: 'Wellbeing is a resource, not a reward for finishing.',
@@ -264,6 +276,7 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
     'ask-mentor',
     'work-across',
     'cpd-friday',
+    'unutilized',
     'leave',
     'overtime',
     'timesheets',
@@ -279,6 +292,7 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
     'work-across',
     'cpd-friday',
     'client-meeting',
+    'unutilized',
     'leave',
     'overtime',
     'timesheets',

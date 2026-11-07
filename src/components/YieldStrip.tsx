@@ -10,18 +10,36 @@ const ITEMS: { key: keyof Resources; label: string }[] = [
   { key: 'growth', label: 'Growth' },
 ]
 
-export function YieldStrip({ resources, burnout }: { resources: Resources; burnout?: boolean }) {
+export function YieldStrip({
+  resources,
+  burnout,
+  preview,
+}: {
+  resources: Resources
+  burnout?: boolean
+  /** Hovered action deltas (Civ-style before/after feedback). */
+  preview?: Partial<Record<keyof Resources, number>> | null
+}) {
   return (
     <div className="yield-strip" aria-label="Resources">
-      {ITEMS.map((item) => (
-        <div className="yield-chip" key={item.key}>
-          <div className="label">{item.label}</div>
-          <div className="value">
-            {Math.round(resources[item.key])}
-            {burnout && item.key !== 'hours' && item.key !== 'wellbeing' ? '*' : ''}
+      {ITEMS.map((item) => {
+        const delta = preview?.[item.key]
+        const showDelta = typeof delta === 'number' && delta !== 0
+        return (
+          <div className={`yield-chip${showDelta ? ' yield-chip-preview' : ''}`} key={item.key}>
+            <div className="label">{item.label}</div>
+            <div className="value">
+              {Math.round(resources[item.key])}
+              {burnout && item.key !== 'hours' && item.key !== 'wellbeing' ? '*' : ''}
+            </div>
+            {showDelta && (
+              <div className={`yield-delta ${delta > 0 ? 'up' : 'down'}`}>
+                {delta > 0 ? `+${delta}` : delta}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

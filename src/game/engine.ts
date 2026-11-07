@@ -265,6 +265,64 @@ export function canAfford(state: GameState, action: ActionDef): boolean {
   return state.resources.hours >= action.hours
 }
 
+/** Civ-style yield preview for one selection of an action (includes slotted card bonuses). */
+export function actionYieldPreview(
+  state: GameState,
+  action: ActionDef,
+): {
+  hoursDelta: number
+  resources: Partial<Record<keyof Resources, number>>
+  projectProgress: number
+  pathLean: PathId[]
+  reviewHint?: string
+} {
+  const burnout = state.burnoutTurns > 0
+  const bonus = cardBonus(state, action)
+  const resources: Partial<Record<keyof Resources, number>> = {}
+  const keys: (keyof Resources)[] = [
+    'competence',
+    'reputation',
+    'network',
+    'fee',
+    'wellbeing',
+    'growth',
+  ]
+  for (const key of keys) {
+    const base = (action.effects[key as keyof typeof action.effects] as number | undefined) ?? 0
+    const extra = bonus[key] ?? 0
+    let total = base + extra
+    if (!total) continue
+    if (burnout && key !== 'wellbeing' && key !== 'hours') total = Math.round(total * 0.5 * 10) / 10
+    resources[key] = total
+  }
+
+  const pathLean: PathId[] = []
+  const tags = new Set(action.tags)
+  if (tags.has('delivery') || tags.has('tender') || tags.has('commercial')) pathLean.push('delivery')
+  if (tags.has('technical') || tags.has('detailed') || tags.has('software')) pathLean.push('technical')
+  if (tags.has('collaboration') || tags.has('coordination') || tags.has('network')) {
+    pathLean.push('collaboration')
+  }
+  if (tags.has('leadership') || tags.has('feedback')) pathLean.push('leadership')
+
+  let reviewHint: string | undefined
+  if (action.id === 'unutilized') {
+    reviewHint = 'Review: −1 Delivery per idle block this cycle'
+  }
+
+  return {
+    hoursDelta: -action.hours,
+    resources,
+    projectProgress: action.effects.projectProgress ?? 0,
+    pathLean,
+    reviewHint,
+  }
+}
+
+export function timesUsedThisMonth(state: GameState, actionId: string): number {
+  return state.actionsThisMonth.filter((id) => id === actionId).length
+}
+
 export function performAction(state: GameState, actionId: string): GameState {
   const next = clone(state)
   const action = ACTIONS.find((a) => a.id === actionId)
@@ -339,7 +397,16 @@ export function performAction(state: GameState, actionId: string): GameState {
 
   next.actionsThisMonth.push(actionId)
   next.actionsThisReview.push(actionId)
-  pushLog(next, `Did: ${action.name}`, 'neutral')
+  const uses = next.actionsThisMonth.filter((id) => id === actionId).length
+  if (action.id === 'unutilized') {
+    pushLog(
+      next,
+      `Logged unutilized block ×${uses} (−8h, −1 Fee, −1 Wellbeing; −1 Delivery at review).`,
+      'warn',
+    )
+  } else {
+    pushLog(next, `Did: ${action.name}${uses > 1 ? ` (×${uses} this month)` : ''}`, 'neutral')
+  }
 
   if (next.resources.wellbeing <= 0 && next.burnoutTurns <= 0) {
     next.burnoutTurns = 6
@@ -352,6 +419,24 @@ export function performAction(state: GameState, actionId: string): GameState {
 export function endMonth(state: GameState): GameState {
   const next = clone(state)
   if (next.screen !== 'desk' || next.ended) return state
+
+  // leftover hours are still idle — nudge the player; scoring needs explicit Unutilized blocks
+  const leftover = next.resources.hours
+  const idleBlocks = next.actionsThisMonth.filter((id) => id === 'unutilized').length
+  if (leftover >= 8) {
+    const suggested = Math.floor(leftover / 8)
+    pushLog(
+      next,
+      `${leftover}h left unspent. Log Unutilized time (−8h) ${suggested}× next time — idle hours still cost Fee/Wellbeing now and −1 Delivery each at review.`,
+      'warn',
+    )
+  } else if (idleBlocks >= 3) {
+    pushLog(
+      next,
+      `Heavy idle month (${idleBlocks} unutilized blocks). Expect Delivery to take the hit at review.`,
+      'warn',
+    )
+  }
 
   // passive founding charter CPD if diarised
   if (next.actionsThisMonth.includes('cpd-friday')) {
@@ -566,6 +651,16 @@ export function beginReview(state: GameState): GameState {
   const gradeDef = GRADES[next.grade]
   for (const m of gradeDef.milestones) {
     if (next.milestonesHit.includes(m.id)) delta[m.path] += 1
+  }
+
+  // Unutilized time: each −8h idle block scored this cycle costs −1 Delivery
+  // (no billable output, no path evidence). Immediate −1 Fee / −1 Wellbeing already applied on select.
+  const idleBlocks = actionCounts['unutilized'] ?? 0
+  if (idleBlocks > 0) {
+    delta.delivery -= idleBlocks
+    notes.push(
+      `Unutilized time ×${idleBlocks}: −${idleBlocks} Delivery (each −8h idle block). Fee/Wellbeing already paid when logged.`,
+    )
   }
 
   // round down / apply
