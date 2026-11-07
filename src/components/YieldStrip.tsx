@@ -10,31 +10,48 @@ const ITEMS: { key: keyof Resources; label: string }[] = [
   { key: 'growth', label: 'Growth' },
 ]
 
+function fmt(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`
+}
+
 export function YieldStrip({
   resources,
   burnout,
-  preview,
+  monthPlan,
+  hoverPreview,
 }: {
   resources: Resources
   burnout?: boolean
-  /** Hovered action deltas (Civ-style before/after feedback). */
-  preview?: Partial<Record<keyof Resources, number>> | null
+  /** Cumulative yield deltas for actions already stacked this month. */
+  monthPlan?: Partial<Record<keyof Resources, number>> | null
+  /** Hovered next-action deltas (Civ-style before commit). */
+  hoverPreview?: Partial<Record<keyof Resources, number>> | null
 }) {
   return (
-    <div className="yield-strip" aria-label="Resources">
+    <div className="yield-strip" aria-label="Yields">
       {ITEMS.map((item) => {
-        const delta = preview?.[item.key]
-        const showDelta = typeof delta === 'number' && delta !== 0
+        const plan = monthPlan?.[item.key]
+        const hover = hoverPreview?.[item.key]
+        const showPlan = typeof plan === 'number' && plan !== 0
+        const showHover = typeof hover === 'number' && hover !== 0
         return (
-          <div className={`yield-chip${showDelta ? ' yield-chip-preview' : ''}`} key={item.key}>
+          <div
+            className={`yield-chip${showHover ? ' yield-chip-preview' : ''}${showPlan ? ' yield-chip-plan' : ''}`}
+            key={item.key}
+          >
             <div className="label">{item.label}</div>
             <div className="value">
               {Math.round(resources[item.key])}
               {burnout && item.key !== 'hours' && item.key !== 'wellbeing' ? '*' : ''}
             </div>
-            {showDelta && (
-              <div className={`yield-delta ${delta > 0 ? 'up' : 'down'}`}>
-                {delta > 0 ? `+${delta}` : delta}
+            {showPlan && (
+              <div className={`yield-delta month ${plan > 0 ? 'up' : 'down'}`} title="This month so far">
+                {fmt(plan)}
+              </div>
+            )}
+            {showHover && (
+              <div className={`yield-delta hover ${hover > 0 ? 'up' : 'down'}`} title="If you take this action">
+                next {fmt(hover)}
               </div>
             )}
           </div>

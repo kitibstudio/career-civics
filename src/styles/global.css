@@ -272,12 +272,25 @@ a {
   margin-top: 0.12rem;
 }
 
+.yield-delta.month {
+  opacity: 0.95;
+}
+
+.yield-delta.hover {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
 .yield-delta.up {
   color: #7ddeb8;
 }
 
 .yield-delta.down {
   color: #f0a090;
+}
+
+.yield-chip-plan {
+  border-color: rgba(197, 212, 226, 0.28);
 }
 
 .desk-grid {
@@ -399,6 +412,12 @@ a {
   color: var(--ink);
 }
 
+.action-yield-chip.flat {
+  background: rgba(10, 22, 40, 0.04);
+  border-color: rgba(10, 22, 40, 0.08);
+  color: var(--steel);
+}
+
 .action-yield-chip.up {
   background: rgba(47, 143, 107, 0.12);
   border-color: rgba(47, 143, 107, 0.28);
@@ -409,6 +428,33 @@ a {
   background: rgba(212, 101, 74, 0.12);
   border-color: rgba(212, 101, 74, 0.28);
   color: var(--signal);
+}
+
+.path-explain-body {
+  margin-top: 0.85rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.path-explain-body p {
+  margin: 0 0 0.55rem;
+}
+
+.path-how-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+.path-evidence {
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--steel);
 }
 
 .action-yield-meta {

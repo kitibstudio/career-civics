@@ -4,12 +4,13 @@ import { ActionYields } from '../components/ActionYields'
 import { CARD_BY_ID } from '../data/cards'
 import { GRADES } from '../data/grades'
 import type { GameState, Resources } from '../data/types'
-import { PathBars } from '../components/PathBars'
+import { PathExplain } from '../components/PathExplain'
 import { YieldStrip } from '../components/YieldStrip'
 import {
   actionYieldPreview,
   canAfford,
   monthActions,
+  monthPlanYieldDeltas,
   slotCount,
   timesUsedThisMonth,
 } from '../game/engine'
@@ -29,6 +30,7 @@ export function DeskScreen({
   const grade = GRADES[state.grade]
   const project = state.projects[0]
   const slots = slotCount(state)
+  const monthPlan = monthPlanYieldDeltas(state)
   const [hoverPreview, setHoverPreview] = useState<Partial<Record<keyof Resources, number>> | null>(
     null,
   )
@@ -38,15 +40,17 @@ export function DeskScreen({
       <YieldStrip
         resources={state.resources}
         burnout={state.burnoutTurns > 0}
-        preview={hoverPreview}
+        monthPlan={monthPlan}
+        hoverPreview={hoverPreview}
       />
 
       {!state.tipSeen && (
         <div className="tip" style={{ color: 'var(--paper)' }}>
-          <strong>How a month works:</strong> spend Hours on actions — you can pick the same action
-          more than once. Each card shows the yield change before you commit. Leftover hours? Log{' '}
-          <em>Unutilized time</em> (−8h each). Every sixth month is a Review that scores your four
-          paths.
+          <strong>How a month works:</strong> stack actions into your 160 Hours — the same card can be
+          taken more than once. Each choice lists +/− on every yield; the top strip updates as you
+          plan and highlights the next pick on hover. Leftover hours? Log <em>Unutilized time</em>{' '}
+          (−8h): Fee and Wellbeing yields fall; Competence, Reputation, Network, and Growth earn
+          nothing.
           <div style={{ marginTop: '0.6rem' }}>
             <button className="btn btn-primary" onClick={onDismissTip}>
               Got it
@@ -180,14 +184,7 @@ export function DeskScreen({
           </div>
 
           <div className="panel" style={{ padding: '1.1rem' }}>
-            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
-              Promotion paths
-            </p>
-            <PathBars paths={state.paths} grade={state.grade} compact />
-            <p className="muted" style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
-              Paths score at Review from habits, specialisms, milestones, and idle blocks — hover an
-              action to preview resource yields now.
-            </p>
+            <PathExplain state={state} />
           </div>
 
           <div className="panel-dark" style={{ padding: '1.1rem' }}>

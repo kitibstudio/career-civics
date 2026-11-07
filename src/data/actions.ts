@@ -205,7 +205,7 @@ export const ACTIONS: ActionDef[] = [
     id: 'unutilized',
     name: 'Unutilized time',
     blurb:
-      'Eight idle hours — no package, no conversation. Select once per leftover block (e.g. 24h idle = three times).',
+      'Eight idle hours with no work. Select once per leftover block (24h idle = three times). Yields: −8 Hours, −1 Fee (nothing billable), −1 Wellbeing (drift); Competence, Reputation, Network, and Growth stay flat — idle time earns none.',
     hours: 8,
     tags: ['idle'],
     effects: {

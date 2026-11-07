@@ -135,6 +135,15 @@ export function createNewGame(characterId: string): GameState {
       wellbeing: 12,
       growth: 0,
     },
+    monthStartResources: {
+      hours: 160,
+      competence: 4,
+      reputation: 2,
+      network: 2,
+      fee: 10,
+      wellbeing: 12,
+      growth: 0,
+    },
     paths: emptyPaths(),
     growthBanked: 0,
     slotted: [habit, ...(spec ? [spec] : [])].slice(0, GRADES[grade].slots),
@@ -307,7 +316,8 @@ export function actionYieldPreview(
 
   let reviewHint: string | undefined
   if (action.id === 'unutilized') {
-    reviewHint = 'Review: −1 Delivery per idle block this cycle'
+    reviewHint =
+      'Yields while idle: Fee & Wellbeing fall; Competence, Reputation, Network, Growth earn nothing. Delivery path −1 per block at Review.'
   }
 
   return {
@@ -321,6 +331,64 @@ export function actionYieldPreview(
 
 export function timesUsedThisMonth(state: GameState, actionId: string): number {
   return state.actionsThisMonth.filter((id) => id === actionId).length
+}
+
+/** Month-to-date yield deltas vs the start-of-month snapshot (live plan as actions stack). */
+export function monthPlanYieldDeltas(
+  state: GameState,
+): Partial<Record<keyof Resources, number>> {
+  const start = state.monthStartResources ?? state.resources
+  const keys: (keyof Resources)[] = [
+    'hours',
+    'competence',
+    'reputation',
+    'network',
+    'fee',
+    'wellbeing',
+    'growth',
+  ]
+  const out: Partial<Record<keyof Resources, number>> = {}
+  for (const key of keys) {
+    const d = Math.round((state.resources[key] - start[key]) * 10) / 10
+    if (d !== 0) out[key] = d
+  }
+  return out
+}
+
+/** Evidence counts this review cycle — what feeds each promotion path. */
+export function pathActionEvidence(state: GameState): Record<PathId, { label: string; count: number }[]> {
+  const counts = state.actionsThisReview.reduce<Record<string, number>>((acc, id) => {
+    acc[id] = (acc[id] ?? 0) + 1
+    return acc
+  }, {})
+  const n = (id: string) => counts[id] ?? 0
+  return {
+    delivery: [
+      { label: 'Issue drawings', count: n('drawing-set') },
+      { label: 'Design review', count: n('design-review') },
+      { label: 'Timesheets', count: n('timesheets') },
+      { label: 'Unutilized (−8h)', count: n('unutilized') },
+    ].filter((x) => x.count > 0),
+    technical: [
+      { label: 'Calc package', count: n('calc-package') },
+      { label: 'Model layouts', count: n('model-layouts') },
+      { label: 'Automate', count: n('automate') },
+      { label: 'CPD', count: n('cpd-friday') },
+      { label: 'Learn Revit', count: n('learn-revit') },
+    ].filter((x) => x.count > 0),
+    collaboration: [
+      { label: 'Work Across', count: n('work-across') },
+      { label: 'Client meeting', count: n('client-meeting') },
+      { label: 'Clash cycle', count: n('clash-cycle') },
+      { label: 'Lunch & Learn', count: n('lunch-learn') },
+      { label: 'Site visit', count: n('site-visit') },
+    ].filter((x) => x.count > 0),
+    leadership: [
+      { label: 'Ask Up', count: n('ask-mentor') },
+      { label: 'Support Down', count: n('mentor-junior') },
+      { label: 'CPD', count: n('cpd-friday') },
+    ].filter((x) => x.count > 0),
+  }
 }
 
 export function performAction(state: GameState, actionId: string): GameState {
@@ -401,7 +469,7 @@ export function performAction(state: GameState, actionId: string): GameState {
   if (action.id === 'unutilized') {
     pushLog(
       next,
-      `Logged unutilized block ×${uses} (−8h, −1 Fee, −1 Wellbeing; −1 Delivery at review).`,
+      `Unutilized ×${uses}: yields −8 Hours, −1 Fee, −1 Wellbeing; Competence/Reputation/Network/Growth unchanged. Delivery path −1 at Review.`,
       'warn',
     )
   } else {
@@ -420,20 +488,20 @@ export function endMonth(state: GameState): GameState {
   const next = clone(state)
   if (next.screen !== 'desk' || next.ended) return state
 
-  // leftover hours are still idle — nudge the player; scoring needs explicit Unutilized blocks
+  // leftover hours are still idle — nudge the player; yields need explicit Unutilized blocks
   const leftover = next.resources.hours
   const idleBlocks = next.actionsThisMonth.filter((id) => id === 'unutilized').length
   if (leftover >= 8) {
     const suggested = Math.floor(leftover / 8)
     pushLog(
       next,
-      `${leftover}h left unspent. Log Unutilized time (−8h) ${suggested}× next time — idle hours still cost Fee/Wellbeing now and −1 Delivery each at review.`,
+      `${leftover}h left unspent. Log Unutilized (−8h) ${suggested}× next time — idle yields: −Fee, −Wellbeing now; flat Competence/Reputation/Network/Growth; Delivery path −1 each at Review.`,
       'warn',
     )
   } else if (idleBlocks >= 3) {
     pushLog(
       next,
-      `Heavy idle month (${idleBlocks} unutilized blocks). Expect Delivery to take the hit at review.`,
+      `Heavy idle month (${idleBlocks} unutilized blocks). Fee/Wellbeing yields took the hit; Delivery path will too at Review.`,
       'warn',
     )
   }
@@ -447,6 +515,7 @@ export function endMonth(state: GameState): GameState {
   next.turn += 1
   next.actionsThisMonth = []
   next.resources.hours = 160
+  next.monthStartResources = clone(next.resources)
   if (next.burnoutTurns > 0) next.burnoutTurns -= 1
 
   // wellbeing drift
@@ -653,13 +722,13 @@ export function beginReview(state: GameState): GameState {
     if (next.milestonesHit.includes(m.id)) delta[m.path] += 1
   }
 
-  // Unutilized time: each −8h idle block scored this cycle costs −1 Delivery
-  // (no billable output, no path evidence). Immediate −1 Fee / −1 Wellbeing already applied on select.
+  // Unutilized time: each −8h idle block this cycle costs −1 Delivery path
+  // (no billable output). Yield hits (−1 Fee, −1 Wellbeing; other yields flat) already applied on select.
   const idleBlocks = actionCounts['unutilized'] ?? 0
   if (idleBlocks > 0) {
     delta.delivery -= idleBlocks
     notes.push(
-      `Unutilized time ×${idleBlocks}: −${idleBlocks} Delivery (each −8h idle block). Fee/Wellbeing already paid when logged.`,
+      `Unutilized ×${idleBlocks}: yields already logged (−Fee/−Wellbeing per block; Competence/Reputation/Network/Growth earned nothing). Delivery path −${idleBlocks} this Review.`,
     )
   }
 
@@ -931,7 +1000,11 @@ export function loadGame(): GameState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as GameState
+    const state = JSON.parse(raw) as GameState
+    if (!state.monthStartResources) {
+      state.monthStartResources = clone(state.resources)
+    }
+    return state
   } catch {
     return null
   }
