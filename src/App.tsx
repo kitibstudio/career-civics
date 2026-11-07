@@ -28,7 +28,14 @@ export default function App() {
       <div className="blueprint-grid" aria-hidden />
       {state && screen !== 'title' && screen !== 'character' && screen !== 'win' && (
         <div className="screen" style={{ paddingBottom: 0 }}>
-          <TopNav state={state} onScreen={(s) => dispatch({ type: 'screen', screen: s })} />
+          <TopNav
+            state={state}
+            onScreen={(s) => dispatch({ type: 'screen', screen: s })}
+            onNewCareer={() => {
+              dispatch({ type: 'reset' })
+              setPicking(true)
+            }}
+          />
         </div>
       )}
 

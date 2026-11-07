@@ -11,13 +11,22 @@ const TABS: { id: ScreenId; label: string }[] = [
 export function TopNav({
   state,
   onScreen,
+  onNewCareer,
 }: {
   state: GameState
   onScreen: (s: ScreenId) => void
+  onNewCareer: () => void
 }) {
   const character = CHARACTERS.find((c) => c.id === state.characterId)
   const grade = GRADES[state.grade]
   const locked = state.screen === 'review' || state.screen === 'event' || state.screen === 'promotion'
+
+  function handleNewCareer() {
+    const ok = window.confirm(
+      'Start a new career? This clears your current save so you can pick the same character again or try another path.',
+    )
+    if (ok) onNewCareer()
+  }
 
   return (
     <div className="topbar">
@@ -30,21 +39,26 @@ export function TopNav({
           Month {state.turn} · Review {(Math.floor((state.monthInGrade - 1) / 6) % 10) + 1} in grade
         </div>
       </div>
-      {!locked && (
-        <div className="nav-pills" role="tablist" aria-label="Screens">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={`nav-btn ${state.screen === tab.id ? 'active' : ''}`}
-              onClick={() => onScreen(tab.id)}
-              role="tab"
-              aria-selected={state.screen === tab.id}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="topbar-actions">
+        {!locked && (
+          <div className="nav-pills" role="tablist" aria-label="Screens">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                className={`nav-btn ${state.screen === tab.id ? 'active' : ''}`}
+                onClick={() => onScreen(tab.id)}
+                role="tab"
+                aria-selected={state.screen === tab.id}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <button className="btn btn-ghost nav-restart" type="button" onClick={handleNewCareer}>
+          New career
+        </button>
+      </div>
     </div>
   )
 }

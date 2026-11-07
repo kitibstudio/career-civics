@@ -71,7 +71,7 @@ export function PathBars({
               />
               <div className={`bar-fill tone-${tone}`} style={{ width: pct(v) }} />
             </div>
-            <div className="path-value">
+            <div className="path-value" title={`Path total this grade ${v} · M2 target ${cfg.m2}`}>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{v}</span>
               <span className="path-value-target">/{cfg.m2}</span>
             </div>
@@ -88,7 +88,9 @@ export function PathBars({
         <span>
           <i className="bar-marker-swatch golden" /> Golden {cfg.golden}
         </span>
-        <span className="path-legend-note">Right number = current / M2 target</span>
+        <span className="path-legend-note">
+          Right number = path total this grade / M2 target (points add at Review)
+        </span>
       </div>
     </div>
   )

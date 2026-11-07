@@ -18,6 +18,7 @@ export function PathExplain({ state }: { state: GameState }) {
   const evidence = pathActionEvidence(state)
   const cfg = gateConfig(state.grade)
   const monthsIntoCycle = ((state.monthInGrade - 1) % 6) + 1
+  const last = state.lastReview
 
   return (
     <div className="path-explain">
@@ -27,16 +28,57 @@ export function PathExplain({ state }: { state: GameState }) {
       <PathBars paths={state.paths} grade={state.grade} compact />
 
       <div className="path-explain-body">
-        <p>
-          <strong>How levels are arrived at.</strong> Resource yields (Hours, Competence, Reputation,
-          Network, Fee, Wellbeing, Growth) move when you take desk actions. Path levels
-          (Delivery / Technical / Collaboration / Leadership) update at each six-month{' '}
-          <strong>Review</strong>: mentor ratings on slotted Habits &amp; Specialisms × those cards’
-          yields, plus milestones — not a live bar when you click.
-        </p>
+        <div className="score-recipe" role="note">
+          <strong>How the 1–{cfg.golden} path numbers work (they are not arbitrary)</strong>
+          <p>
+            The big number on each bar (e.g. <code>3 / {cfg.m2}</code>) is your{' '}
+            <strong>path total this grade</strong> over the M2 target. Points are added only at each
+            six-month <strong>Review</strong> — desk clicks move yields now; paths update later.
+          </p>
+          <ol>
+            <li>
+              <strong>Base:</strong> every path gets +{cfg.base} just for surviving the cycle.
+            </li>
+            <li>
+              <strong>Slotted cards:</strong> each Habit / Specialism scores into its path. Mentors
+              rate the card from your cycle evidence (Not shown → Emerging → Consistent → Role model).
+              Rating multiplies the card’s yields (0× / 0.5× / 1× / 1.5×).
+            </li>
+            <li>
+              <strong>Milestones:</strong> +1 to the matching path when you have hit that grade
+              milestone (calc package, drawing set, etc.).
+            </li>
+            <li>
+              <strong>Idle drag:</strong> each Unutilized (−8h) block this cycle −1 Delivery.
+            </li>
+            <li>
+              <strong>Crises / morale:</strong> slotted crises and failed morale checks can subtract.
+            </li>
+          </ol>
+          <p>
+            Those Review deltas <em>stack</em> across the grade. M1 ({cfg.m1}), M2 ({cfg.m2}), and
+            Golden ({cfg.golden}) are thresholds on that running total — not a separate 1–5 star
+            rating.
+          </p>
+          {last && (
+            <p className="last-review-delta">
+              Last Review deltas:{' '}
+              {(Object.keys(PATH_HOW) as PathId[])
+                .map((p) => {
+                  const d = last.pathDelta[p]
+                  const sign = d > 0 ? `+${d}` : `${d}`
+                  return `${PATH_LABELS[p]} ${sign}`
+                })
+                .join(' · ')}
+              {last.gatePass ? ' · gate passed' : ' · gate missed'}
+            </p>
+          )}
+        </div>
+
         <p className="muted" style={{ fontSize: '0.85rem' }}>
-          What good looks like this grade: M1 ≥{cfg.m1} on every path, M2 ≥{cfg.m2} on at least{' '}
-          {cfg.gateStrong} path(s); Golden ≥{cfg.golden}. Markers on the bars show those targets.
+          Gate this grade: every path ≥ M1 ({cfg.m1}), and at least {cfg.gateStrong} path(s) ≥ M2 (
+          {cfg.m2}). Golden ({cfg.golden}) is optional excellence — keep a matching Habit free on
+          promotion.
         </p>
 
         <div className="cycle-glossary" role="note">
@@ -46,7 +88,7 @@ export function PathExplain({ state }: { state: GameState }) {
             6). Each line counts how many −8h blocks of that action you have taken since the last
             Review. Mentors use those counts to rate your slotted Habits/Specialisms (e.g. more Work
             Across → stronger Collaboration evidence). It is a tally of evidence, not path points yet
-            — points land at Review.
+            — points land at Review via the recipe above.
           </p>
         </div>
 

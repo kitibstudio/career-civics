@@ -208,6 +208,26 @@ a {
   margin-bottom: 1rem;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.nav-restart {
+  font-size: 0.85rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(197, 212, 226, 0.28);
+  border-radius: 999px;
+  color: var(--mist);
+}
+
+.nav-restart:hover {
+  border-color: var(--cyan);
+  color: var(--paper);
+}
+
 .nav-pills {
   display: flex;
   flex-wrap: wrap;
@@ -486,7 +506,8 @@ a {
 }
 
 .gate-glossary,
-.cycle-glossary {
+.cycle-glossary,
+.score-recipe {
   font-size: 0.86rem;
   color: var(--ink);
   background: rgba(43, 168, 181, 0.08);
@@ -494,6 +515,26 @@ a {
   border-radius: 12px;
   padding: 0.75rem 0.85rem;
   margin-bottom: 0.65rem;
+}
+
+.score-recipe ol {
+  margin: 0.45rem 0 0.55rem;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.score-recipe code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+}
+
+.last-review-delta {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--steel);
 }
 
 .gate-glossary p,
