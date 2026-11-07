@@ -4,6 +4,7 @@ import { ActionYields } from '../components/ActionYields'
 import { CARD_BY_ID } from '../data/cards'
 import { GRADES } from '../data/grades'
 import type { GameState, Resources } from '../data/types'
+import { FoundingCharter } from '../components/FoundingCharter'
 import { PathExplain } from '../components/PathExplain'
 import { YieldStrip } from '../components/YieldStrip'
 import {
@@ -178,9 +179,10 @@ export function DeskScreen({
               })}
               {!state.slotted.length && <div className="muted">No cards slotted.</div>}
             </div>
-            <p className="tip" style={{ marginTop: '0.85rem', color: 'var(--ink)' }}>
-              Founding Charter: Second Pair of Eyes is always on — QA before issue, CPD stays live.
-            </p>
+          </div>
+
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <FoundingCharter />
           </div>
 
           <div className="panel" style={{ padding: '1.1rem' }}>

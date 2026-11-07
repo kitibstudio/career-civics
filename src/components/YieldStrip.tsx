@@ -30,39 +30,54 @@ export function YieldStrip({
   hoverPreview?: Partial<Record<keyof Resources, number>> | null
 }) {
   return (
-    <div className="yield-strip" aria-label="Yields">
-      {ITEMS.map((item) => {
-        const plan = monthPlan?.[item.key] ?? 0
-        const hover = hoverPreview?.[item.key]
-        const showHover = typeof hover === 'number' && hover !== 0
-        const planTone = plan > 0 ? 'up' : plan < 0 ? 'down' : 'flat'
-        return (
-          <div
-            className={`yield-chip yield-chip-plan${showHover ? ' yield-chip-preview' : ''}`}
-            key={item.key}
-          >
-            <div className="label">{item.label}</div>
-            <div className="value">
-              {Math.round(resources[item.key])}
-              {burnout && item.key !== 'hours' && item.key !== 'wellbeing' ? '*' : ''}
-            </div>
+    <div className="yield-strip-wrap">
+      <div className="yield-strip" aria-label="Yields">
+        {ITEMS.map((item) => {
+          const plan = monthPlan?.[item.key] ?? 0
+          const hover = hoverPreview?.[item.key]
+          const showHover = typeof hover === 'number' && hover !== 0
+          const planTone = plan > 0 ? 'up' : plan < 0 ? 'down' : 'flat'
+          return (
             <div
-              className={`yield-delta month ${planTone}`}
-              title="Points banked this month"
+              className={`yield-chip yield-chip-plan${showHover ? ' yield-chip-preview' : ''}`}
+              key={item.key}
             >
-              {fmt(plan)}
-            </div>
-            {showHover && (
-              <div
-                className={`yield-delta hover ${hover > 0 ? 'up' : 'down'}`}
-                title="If you take this action"
-              >
-                next {fmt(hover)}
+              <div className="label">{item.label}</div>
+              <div className="value" title="Career total for this yield">
+                {Math.round(resources[item.key])}
+                {burnout && item.key !== 'hours' && item.key !== 'wellbeing' ? '*' : ''}
               </div>
-            )}
-          </div>
-        )
-      })}
+              <div
+                className={`yield-delta month ${planTone}`}
+                title="Banked this month — change since the month started"
+              >
+                {fmt(plan)}
+              </div>
+              {showHover && (
+                <div
+                  className={`yield-delta hover ${hover > 0 ? 'up' : 'down'}`}
+                  title="Preview — what this yield would change if you take the highlighted action"
+                >
+                  next {fmt(hover)}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="yield-strip-legend" role="note">
+        <span>
+          <strong>Big number</strong> = career total
+        </span>
+        <span>
+          <strong className="leg-up">+6</strong> = banked this month (since the month started)
+        </span>
+        <span>
+          <strong className="leg-next">next +3</strong> = preview if you take the action you are
+          hovering / focusing
+        </span>
+        {burnout ? <span>* Burnout: most yields halved</span> : null}
+      </div>
     </div>
   )
 }

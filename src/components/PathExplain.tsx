@@ -17,6 +17,7 @@ const PATH_HOW: Record<PathId, string> = {
 export function PathExplain({ state }: { state: GameState }) {
   const evidence = pathActionEvidence(state)
   const cfg = gateConfig(state.grade)
+  const monthsIntoCycle = ((state.monthInGrade - 1) % 6) + 1
 
   return (
     <div className="path-explain">
@@ -38,6 +39,17 @@ export function PathExplain({ state }: { state: GameState }) {
           {cfg.gateStrong} path(s); Golden ≥{cfg.golden}. Markers on the bars show those targets.
         </p>
 
+        <div className="cycle-glossary" role="note">
+          <strong>What “This cycle: Work Across ×7 …” means</strong>
+          <p>
+            A <em>cycle</em> is the six months between Reviews (you are in month {monthsIntoCycle} of
+            6). Each line counts how many −8h blocks of that action you have taken since the last
+            Review. Mentors use those counts to rate your slotted Habits/Specialisms (e.g. more Work
+            Across → stronger Collaboration evidence). It is a tally of evidence, not path points yet
+            — points land at Review.
+          </p>
+        </div>
+
         <ul className="path-how-list">
           {(Object.keys(PATH_HOW) as PathId[]).map((p) => {
             const bits = evidence[p]
@@ -46,7 +58,8 @@ export function PathExplain({ state }: { state: GameState }) {
                 <strong>{PATH_LABELS[p]}</strong> — {PATH_HOW[p]}
                 {bits.length > 0 ? (
                   <div className="path-evidence">
-                    This cycle: {bits.map((b) => `${b.label} ×${b.count}`).join(' · ')}
+                    This cycle (evidence tallies):{' '}
+                    {bits.map((b) => `${b.label} ×${b.count}`).join(' · ')}
                   </div>
                 ) : (
                   <div className="path-evidence">This cycle: no feeding actions yet</div>

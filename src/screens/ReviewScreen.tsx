@@ -36,8 +36,10 @@ export function ReviewScreen({
         </p>
         <h2 className="h2">Mentor ratings</h2>
         <p className="muted">
-          A Civics Turn. Cards rated from your last six months of actions. Gate needs all paths ≥ M1
-          and {cfg.gateStrong} path(s) ≥ M2.
+          A Civics Turn. Cards rated from your last six months of actions. Gate: every path at{' '}
+          <strong>M1</strong> (minimum, {cfg.m1}+) and {cfg.gateStrong} path(s) at <strong>M2</strong>{' '}
+          (strong, {cfg.m2}+). <strong>Golden</strong> ({cfg.golden}+) is exceptional — not required
+          to pass, but carries a Habit free on promotion.
         </p>
 
         <div className="desk-grid" style={{ marginTop: '1rem' }}>

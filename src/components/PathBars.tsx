@@ -18,12 +18,32 @@ export function PathBars({
 
   return (
     <div className="path-bars">
-      <div className="path-grade-target" aria-label={`Good for this grade`}>
-        <span>
-          This grade — good looks like M1 ≥{cfg.m1} on every path, M2 ≥{cfg.m2} on ≥{cfg.gateStrong},
-          Golden ≥{cfg.golden}
-        </span>
+      <div className="gate-glossary" role="note">
+        <p>
+          <strong>What M1 / M2 / Golden mean</strong> — path points from six-monthly Reviews. They are
+          not monthly yields.
+        </p>
+        <ul>
+          <li>
+            <strong>M1 (Milestone 1)</strong> — minimum bar for this grade ({cfg.m1}+). You need{' '}
+            <em>every</em> path at M1 to pass the promotion gate.
+          </li>
+          <li>
+            <strong>M2 (Milestone 2)</strong> — strong path ({cfg.m2}+). Gate also needs at least{' '}
+            {cfg.gateStrong} path(s) at M2.
+          </li>
+          <li>
+            <strong>Golden</strong> — exceptional path ({cfg.golden}+). Unlocks Golden Age carry (keep
+            a matching Habit free on promotion).
+          </li>
+        </ul>
       </div>
+
+      <div className="path-grade-target" aria-label="Good for this grade">
+        This grade — good looks like M1 ≥{cfg.m1} on every path, M2 ≥{cfg.m2} on ≥{cfg.gateStrong},
+        Golden ≥{cfg.golden}. Markers on each bar show those thresholds.
+      </div>
+
       {PATHS.map((p) => {
         const v = paths[p]
         const mark =
@@ -68,6 +88,7 @@ export function PathBars({
         <span>
           <i className="bar-marker-swatch golden" /> Golden {cfg.golden}
         </span>
+        <span className="path-legend-note">Right number = current / M2 target</span>
       </div>
     </div>
   )
