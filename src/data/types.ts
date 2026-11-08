@@ -307,6 +307,7 @@ export type PathLineKind =
   | 'commitment'
   | 'milestone'
   | 'idle'
+  | 'overhead'
   | 'crisis'
   | 'neglect'
   | 'morale'

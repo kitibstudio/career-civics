@@ -169,6 +169,9 @@ export function focusItems(state: GameState, projection?: ReviewProjection): Foc
     const idle = proj.breakdown.idleBlocks
     const causes: string[] = []
     if (p === 'delivery' && idle > 0) causes.push(`Unutilized ×${idle} is costing −${idle}`)
+    const oh = proj.breakdown.overhead
+    if (p === 'delivery' && oh.deliveryCost > 0)
+      causes.push(`internal meetings ${oh.blocks}/${oh.allowance} allowance are costing −${oh.deliveryCost}`)
     const card = hasCardOn(state, p) ? null : cardFor(state, p)
     if (!hasCardOn(state, p) && p !== 'commitment')
       causes.push(card ? `slot a ${PATH_LABELS[p]} card (e.g. ${card})` : `no ${PATH_LABELS[p]} card slotted`)

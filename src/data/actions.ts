@@ -314,6 +314,19 @@ export const ACTIONS: ActionDef[] = [
     },
   },
   {
+    id: 'internal-meeting',
+    name: 'Internal meeting',
+    blurb:
+      'Team meeting, practice briefing or office all-hands — not project work. Non-billable overhead: −1 Fee, +1 Network (you hear what is going on). Feeds no promotion path. A few per Review are expected; beyond the allowance, every 2 blocks cost −1 Delivery.',
+    hours: 8,
+    tags: ['overhead', 'internal'],
+    skills: ['communication'],
+    effects: {
+      fee: -1,
+      network: 1,
+    },
+  },
+  {
     id: 'leave',
     name: 'Take leave',
     blurb: 'Wellbeing is a resource, not a reward for finishing. Stack blocks for a proper break.',
@@ -382,6 +395,7 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
     'risk-review',
     'conduct-dilemma',
     'ask-feedback',
+    'internal-meeting',
     'unutilized',
     'leave',
     'overtime',
@@ -404,6 +418,7 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
     'requirements-brief',
     'ask-feedback',
     'client-meeting',
+    'internal-meeting',
     'unutilized',
     'leave',
     'overtime',

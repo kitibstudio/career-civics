@@ -402,6 +402,16 @@ export function actionYieldPreview(
       idle ? ` (×${idle} this cycle already = −${idle} Delivery)` : ''
     }. Fee & Wellbeing fall now; nothing else is earned.`
   }
+  if (action.id === 'internal-meeting') {
+    const o = overheadStatus(
+      state.grade,
+      state.actionsThisReview.filter((id) => id === 'internal-meeting').length + 1,
+    )
+    reviewHint =
+      o.excess > 0
+        ? `Over the ${o.allowance}-block overhead allowance (${o.blocks} this cycle) — every 2 extra cost −1 Delivery at Review.`
+        : `Overhead ${o.blocks}/${o.allowance} this cycle — non-billable, no path cost yet.`
+  }
 
   return {
     hoursDelta: -action.hours,
@@ -575,6 +585,18 @@ export function performAction(state: GameState, actionId: string): GameState {
       next,
       `Unutilized ×${uses}: yields −8 Hours, −1 Fee, −1 Wellbeing; Competence/Reputation/Network/Growth unchanged. Delivery path −1 at Review.`,
       'warn',
+    )
+  } else if (action.id === 'internal-meeting') {
+    const o = overheadStatus(
+      next.grade,
+      next.actionsThisReview.filter((id) => id === 'internal-meeting').length,
+    )
+    pushLog(
+      next,
+      `Internal meeting: −1 Fee (non-billable), +1 Network. Overhead ${o.blocks}/${o.allowance} this cycle${
+        o.excess > 0 ? ` — over allowance, Delivery −${o.deliveryCost} at Review so far` : ''
+      }.`,
+      o.excess > 0 ? 'warn' : 'neutral',
     )
   } else {
     pushLog(next, `Did: ${action.name}${uses > 1 ? ` (×${uses} this month)` : ''}`, 'neutral')
@@ -763,6 +785,7 @@ export interface ReviewBreakdown {
   moralePenalty: boolean
   crisisNotes: string[]
   idleBlocks: number
+  overhead: OverheadStatus
   neglect: Record<PathId, NeglectRisk>
 }
 
@@ -855,6 +878,18 @@ export function computeReviewBreakdown(state: GameState): ReviewBreakdown {
   const idleBlocks = actionCounts['unutilized'] ?? 0
   if (idleBlocks > 0) add('delivery', -idleBlocks, `Unutilized time ×${idleBlocks} (−1 each)`, 'idle')
 
+  const overhead = overheadStatus(state.grade, actionCounts['internal-meeting'] ?? 0)
+  if (overhead.blocks > 0) {
+    add(
+      'delivery',
+      -overhead.deliveryCost,
+      overhead.excess > 0
+        ? `Internal meetings ×${overhead.blocks} — ${overhead.excess} over the ${overhead.allowance}-block overhead allowance (−1 per 2 extra)`
+        : `Internal meetings ×${overhead.blocks} — within the ${overhead.allowance}-block overhead allowance`,
+      'overhead',
+    )
+  }
+
   for (const p of PATHS) {
     if (pathCarded[p] > 0 || p === 'commitment') continue
     const n = PATH_FEEDING_ACTIONS[p].reduce((s, id) => s + (actionCounts[id] ?? 0), 0)
@@ -900,8 +935,30 @@ export function computeReviewBreakdown(state: GameState): ReviewBreakdown {
     moralePenalty,
     crisisNotes,
     idleBlocks,
+    overhead,
     neglect,
   }
+}
+
+/** Internal-meeting blocks per Review cycle that count as normal overhead — more is expected higher up. */
+export function overheadAllowance(grade: GradeId): number {
+  if (grade === 'graduate' || grade === 'technician') return 3
+  if (grade === 'engineer' || grade === 'seniorTechnician') return 6
+  if (grade === 'senior' || grade === 'bimLead') return 9
+  return 12
+}
+
+export interface OverheadStatus {
+  blocks: number
+  allowance: number
+  excess: number
+  deliveryCost: number
+}
+
+export function overheadStatus(grade: GradeId, blocks: number): OverheadStatus {
+  const allowance = overheadAllowance(grade)
+  const excess = Math.max(0, blocks - allowance)
+  return { blocks, allowance, excess, deliveryCost: Math.floor(excess / 2) }
 }
 
 export interface ReviewProjection {
@@ -998,6 +1055,15 @@ export function beginReview(state: GameState): GameState {
   if (bd.idleBlocks > 0) {
     notes.push(
       `Unutilized ×${bd.idleBlocks}: yields already logged (−Fee/−Wellbeing per block; Competence/Reputation/Network/Growth earned nothing). Delivery path −${bd.idleBlocks} this Review.`,
+    )
+  }
+  if (bd.overhead.blocks > 0) {
+    notes.push(
+      `Internal meetings ×${bd.overhead.blocks}: non-billable overhead (−${bd.overhead.blocks} Fee already logged). ${
+        bd.overhead.deliveryCost
+          ? `${bd.overhead.excess} over allowance → Delivery −${bd.overhead.deliveryCost}.`
+          : `Within the ${bd.overhead.allowance}-block allowance — no path cost.`
+      }`,
     )
   }
 
