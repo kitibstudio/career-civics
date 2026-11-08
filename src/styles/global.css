@@ -998,6 +998,20 @@ a {
 .self-early-btn:disabled {
   opacity: 0.45;
 }
+.promo-blockers {
+  margin-top: 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(168, 90, 72, 0.35);
+  background: rgba(168, 90, 72, 0.08);
+}
+.promo-blockers ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
 .self-paths {
   display: grid;
   gap: 0.45rem;

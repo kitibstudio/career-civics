@@ -58,6 +58,7 @@ export function SelfScreen({
   const grade = GRADES[state.grade]
   const character = CHARACTERS.find((c) => c.id === state.characterId)
   const ready = promotionReady(state)
+  const blockers = ready.blockers ?? []
   const gaps = topGaps(state, 3)
   const specs = milestonesFor(state.grade)
   const growthNeed = growthNeedFor(state.grade)
@@ -123,11 +124,31 @@ export function SelfScreen({
                 : `Early promotion · ${ready.earlyMissing || 'locked'}`}
             </button>
             <p className="muted" style={{ fontSize: '0.78rem', margin: 0 }}>
-              Early route needs month {ready.minMonths}+, 3 milestones, a passed gate, and Growth
-              underway — not just ticking boxes in the first quarter.
+              Normal promo needs month {ready.minMonths}+ in grade. Early: month{' '}
+              {ready.minMonthsEarly}+, 3 milestones, Technical or Delivery at M1
+              {isGradOrTech ? '' : ', and Professional Review if leaving Engineer'}.
             </p>
           </div>
         </div>
+
+        {!ready.ready && blockers.length > 0 && (
+          <div className="promo-blockers">
+            <p className="eyebrow" style={{ color: 'var(--signal)', marginBottom: '0.35rem' }}>
+              Why you can’t promote yet
+            </p>
+            <ul>
+              {blockers
+                .filter((b) => !b.id.startsWith('milestones-early') || !ready.ready)
+                .slice(0, 6)
+                .map((b) => (
+                  <li key={b.id}>
+                    <strong>{b.label}</strong>
+                    <span className="muted"> — {b.fix ?? b.detail}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="desk-grid">

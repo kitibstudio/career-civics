@@ -89,7 +89,7 @@ export function logEvidence(
 export function applyActionChartership(state: GameState, action: ActionDef): void {
   ensureChartership(state)
   if (action.cpdHours) {
-    state.cpd.plannedHours += action.cpdHours
+    addCpdHours(state, action.cpdHours, true)
   }
   if (action.elements?.length) {
     logEvidence(state, {
@@ -175,13 +175,29 @@ export function runProfessionalReview(state: GameState): {
 
 export function commitmentPathDeltaFromActions(actionCounts: Record<string, number>): number {
   let d = 0
-  d += Math.min(2, actionCounts['risk-review'] ?? 0)
-  d += Math.min(2, actionCounts['carbon-option'] ?? 0)
-  d += Math.min(2, actionCounts['conduct-dilemma'] ?? 0)
+  d += Math.min(1, actionCounts['risk-review'] ?? 0)
+  d += Math.min(1, actionCounts['carbon-option'] ?? 0)
+  d += Math.min(1, actionCounts['conduct-dilemma'] ?? 0)
   d += Math.min(1, actionCounts['requirements-brief'] ?? 0)
   d += Math.min(1, actionCounts['evaluate-built'] ?? 0)
-  d += Math.min(2, Math.floor(((actionCounts['cpd-friday'] ?? 0) + (actionCounts['chartership-log'] ?? 0)) / 2))
-  return d
+  d += Math.min(1, Math.floor(((actionCounts['cpd-friday'] ?? 0) + (actionCounts['chartership-log'] ?? 0)) / 3))
+  // Soft cap — Commitment must not go Golden in one Review from desk spam
+  return Math.min(3, d)
+}
+
+/** Add CPD hours with a soft annual year (every 12 turns). Excess above 60h/year barely counts. */
+export function addCpdHours(state: GameState, hours: number, planned: boolean): void {
+  ensureChartership(state)
+  const yearLen = 12
+  if (state.turn - state.cpd.yearStartTurn >= yearLen) {
+    state.cpd.plannedHours = 0
+    state.cpd.unplannedHours = 0
+    state.cpd.yearStartTurn = state.turn
+  }
+  const yearTotal = state.cpd.plannedHours + state.cpd.unplannedHours
+  const effective = yearTotal >= 60 ? Math.max(1, Math.floor(hours / 4)) : hours
+  if (planned) state.cpd.plannedHours += effective
+  else state.cpd.unplannedHours += effective
 }
 
 export { CPD_BLOCK_HOURS, CPD_ANNUAL_TARGET }

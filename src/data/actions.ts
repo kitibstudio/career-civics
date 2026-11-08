@@ -193,6 +193,20 @@ export const ACTIONS: ActionDef[] = [
     },
   },
   {
+    id: 'peer-check',
+    name: 'Peer drawing check',
+    blurb: 'Check a colleague’s sheets — or ask them to check yours. Leadership crumb for technicians.',
+    hours: 8,
+    tags: ['leadership', 'technician', 'qa'],
+    skills: ['technical', 'communication'],
+    elements: ['C4', 'D1'],
+    effects: {
+      competence: 1,
+      reputation: 1,
+      network: 1,
+    },
+  },
+  {
     id: 'chartership-log',
     name: 'Chartership log',
     blurb:
@@ -358,6 +372,7 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
     'model-layouts',
     'clash-cycle',
     'learn-revit',
+    'peer-check',
     'drawing-set',
     'site-visit',
     'ask-mentor',

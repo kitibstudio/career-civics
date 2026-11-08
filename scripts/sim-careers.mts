@@ -55,7 +55,7 @@ const PERSONA_WEIGHTS: Record<
     { id: 'lunch-learn', w: 0.5 },
     { id: 'leave', w: 0.4 },
     { id: 'conduct-dilemma', w: 0.5 },
-    { id: 'automate', w: 0.8 },
+    {     id: 'automate', w: 0.2 }, // avoid Black Box softlock
   ],
   rohan: [
     { id: 'site-visit', w: 4 },
@@ -101,7 +101,8 @@ const PERSONA_WEIGHTS: Record<
     { id: 'chartership-log', w: 1 },
     { id: 'site-visit', w: 1 },
     { id: 'risk-review', w: 0.8 },
-    { id: 'automate', w: 1.5 },
+    { id: 'automate', w: 0.3 },
+    { id: 'peer-check', w: 2 },
     { id: 'timesheets', w: 1 },
     { id: 'lunch-learn', w: 0.8 },
     { id: 'leave', w: 0.5 },
@@ -270,16 +271,17 @@ function handleScreens(state: GameState, rng: () => number): GameState {
       continue
     }
     if (s.screen === 'cards') {
-      // Ensure a balanced loadout: keep specialisms, fill habits for weak paths
       const max = GRADES[s.grade]?.slots ?? 2
       const available = habitsForGrade(s.grade)
-      // Prefer habits covering delivery/technical/collaboration/leadership/commitment
+      // Always keep crisis clearers slotted
+      for (const crisisId of s.crises) {
+        const clearer = CARD_BY_ID[crisisId]?.clearedBy
+        if (clearer && !s.slotted.includes(clearer)) s = toggleCard(s, clearer)
+      }
       const want = ['delivery', 'technical', 'collaboration', 'leadership', 'commitment'] as PathId[]
       for (const path of want) {
         if (s.slotted.length >= max) break
-        const card = available.find(
-          (c) => c.path === path && !s.slotted.includes(c.id),
-        )
+        const card = available.find((c) => c.path === path && !s.slotted.includes(c.id))
         if (card) s = toggleCard(s, card.id)
       }
       while (s.slotted.filter((id) => !s.crises.includes(id)).length < max) {

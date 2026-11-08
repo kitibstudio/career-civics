@@ -171,8 +171,8 @@ export const GRADES: Record<string, GradeDef> = {
       { id: 'layoutSet', label: 'Produce a full layout set', path: 'delivery' },
       { id: 'drawingQa', label: 'Pass a drawing QA check', path: 'technical' },
       { id: 'secondPackage', label: 'Learn your second package', path: 'technical' },
-      { id: 'ceilingCoord', label: 'Coordinate one ceiling void', path: 'collaboration' },
-      { id: 'family', label: 'Build a reusable family or template', path: 'technical' },
+      { id: 'siteVisits', label: 'Log site visits', path: 'collaboration' },
+      { id: 'charterLog', label: 'Start a CPD log', path: 'leadership' },
     ],
     crisis: {
       id: 'issueDay',
@@ -278,15 +278,15 @@ export const GRADES: Record<string, GradeDef> = {
 }
 
 export const MILESTONES_FOR_GATE = {
-  // Growth: steady CPD (~+3/cycle) needs 3–4 reviews for Graduate
-  graduate: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 20 },
-  technician: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 20 },
-  engineer: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 28 },
-  seniorTechnician: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 28 },
-  senior: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 36 },
-  bimLead: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 36 },
-  associate: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 48 },
-  leadCoordinator: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 48 },
+  // Growth needs raised — ~4–6 Reviews at Graduate, not 2 (agent experience report).
+  graduate: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 48 },
+  technician: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 48 },
+  engineer: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 80 },
+  seniorTechnician: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 80 },
+  senior: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 110 },
+  bimLead: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 110 },
+  associate: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 140 },
+  leadCoordinator: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 140 },
 } as const
 
 export function gateConfig(grade: string) {

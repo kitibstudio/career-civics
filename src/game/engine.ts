@@ -15,6 +15,7 @@ import {
   emptyEvidenceMap,
 } from '../data/ukSpec'
 import {
+  addCpdHours,
   applyActionChartership,
   canAttemptProfessionalReview,
   commitmentPathDeltaFromActions,
@@ -28,10 +29,10 @@ import {
   enforceRoleModelCap,
   gainGridEvidence,
   monthInCycle,
-  promotionReady,
   rateCard,
   revealPriorityCell,
 } from './progress'
+import { canPromoteEarly, canPromoteNormal } from './promotion'
 import type {
   ActionDef,
   CardDef,
@@ -537,16 +538,19 @@ export function performAction(state: GameState, actionId: string): GameState {
     }
   }
 
-  // Black Box risk if automate without tinkerer's bench / toolsmith / human check habit
+  // Black Box risk if automate without QA habit — rarer; skip if any crisis already in play
+  const hasQaHabit =
+    next.slotted.includes('tinkerers-bench') ||
+    next.slotted.includes('toolsmith') ||
+    next.masteredHabits.includes('tinkerers-bench')
   if (
     action.id === 'automate' &&
-    !next.slotted.includes('tinkerers-bench') &&
-    !next.slotted.includes('toolsmith') &&
-    Math.random() < 0.22 &&
+    !hasQaHabit &&
+    next.crises.length === 0 &&
+    Math.random() < (next.track === 'technician' ? 0.08 : 0.12) &&
     !next.crises.includes('black-box')
   ) {
-    next.crises.push('black-box')
-    pushLog(next, 'Black Box Crisis: unchecked automation output was nearly issued.', 'bad')
+    drawCrisis(next, 'black-box')
   }
 
   next.actionsThisMonth.push(actionId)
@@ -780,13 +784,14 @@ export function beginReview(state: GameState): GameState {
     delta.collaboration += Math.min(2, lineage)
   }
 
-  // Commitment path from desk evidence + banked event choices (applied only at Review)
-  const commitDelta =
-    commitmentPathDeltaFromActions(actionCounts) + (next.pendingCommitment ?? 0)
+  // Commitment path from desk evidence + banked event choices (capped)
+  const rawCommit =
+    commitmentPathDeltaFromActions(actionCounts) + Math.min(2, next.pendingCommitment ?? 0)
+  const commitDelta = Math.min(3, rawCommit)
   if (commitDelta) {
     delta.commitment += commitDelta
     notes.push(
-      `Commitment: +${commitDelta} (desk blocks${next.pendingCommitment ? ` + event bank ${next.pendingCommitment}` : ''})`,
+      `Commitment: +${commitDelta} (desk/events; soft-capped at +3 this Review)`,
     )
   }
   next.pendingCommitment = 0
@@ -817,9 +822,12 @@ export function beginReview(state: GameState): GameState {
         notes.push(`${p} Drift (−2).`)
         next.neglect[p] = 0
       } else if (crisisId && !next.crises.includes(crisisId)) {
-        next.crises.push(crisisId)
-        crisesDrawn.push(crisisId)
-        notes.push(`Crisis drawn: ${CARD_BY_ID[crisisId]?.name}`)
+        if (drawCrisis(next, crisisId)) {
+          crisesDrawn.push(crisisId)
+          notes.push(
+            `Crisis drawn: ${CARD_BY_ID[crisisId]?.name}. Slot its clearer habit on Cards before promotion.`,
+          )
+        }
         next.neglect[p] = 0
       }
     }
@@ -861,16 +869,17 @@ export function beginReview(state: GameState): GameState {
     next.paths[p] += delta[p]
   }
 
-  // Growth: CPD/charter sessions capped at +3 per cycle; path tiers modest
+  // Growth: tighter caps so a grade takes several Reviews
   const cpdBlocks =
     (actionCounts['cpd-friday'] ?? 0) + (actionCounts['chartership-log'] ?? 0)
-  growthGain += Math.min(3, cpdBlocks)
+  growthGain += Math.min(2, cpdBlocks)
+  let pathGrowth = 0
   for (const p of PATHS) {
-    if (next.paths[p] >= cfg.golden) growthGain += 1
-    else if (next.paths[p] >= cfg.m2) growthGain += 1
+    if (next.paths[p] >= cfg.golden) pathGrowth += 1
+    else if (next.paths[p] >= cfg.m2) pathGrowth += 1
   }
-  // Card growth yields already in growthGain via scoreCard — keep but floor
-  growthGain = Math.min(8, Math.max(0, Math.floor(growthGain)))
+  growthGain += Math.min(2, pathGrowth)
+  growthGain = Math.min(5, Math.max(0, Math.floor(growthGain)))
   next.resources.growth += growthGain
   next.growthBanked = next.resources.growth
 
@@ -967,49 +976,81 @@ export function toggleCard(state: GameState, cardId: string): GameState {
   return next
 }
 
+function drawCrisis(state: GameState, crisisId: string): boolean {
+  // Graduate/Technician: at most one crisis at a time
+  if (
+    (state.grade === 'graduate' || state.grade === 'technician') &&
+    state.crises.length >= 1
+  ) {
+    return false
+  }
+  if (state.crises.includes(crisisId)) return false
+  state.crises.push(crisisId)
+  // Auto-offer clearer habit into loadout when possible
+  const clearer = CARD_BY_ID[crisisId]?.clearedBy
+  if (clearer && !state.slotted.includes(clearer)) {
+    const max = slotCount(state)
+    const nonCrisis = state.slotted.filter((id) => !state.crises.includes(id))
+    if (state.slotted.length < max) {
+      state.slotted.push(clearer)
+    } else if (nonCrisis.length) {
+      const drop = nonCrisis[nonCrisis.length - 1]!
+      state.slotted = state.slotted.filter((id) => id !== drop)
+      state.slotted.push(clearer)
+    }
+    pushLog(
+      state,
+      `Cards: slotted “${CARD_BY_ID[clearer]?.name ?? clearer}” to clear ${CARD_BY_ID[crisisId]?.name}. Keep it Consistent next Review.`,
+      'warn',
+    )
+  }
+  return true
+}
+
 export function finishReview(state: GameState): GameState {
   const next = clone(state)
-  const cfg = gateConfig(next.grade)
-  const ready =
-    next.consecutiveGate >= 2 &&
-    next.growthBanked >= cfg.growthNeed &&
-    next.crises.length === 0 &&
-    !(next.lastReview?.moralePenalty)
 
-  // clear crises if counter habit was slotted consistently
+  // Clear crises if clearer habit was slotted Emerging+ (was Consistent-only — softlock risk)
   if (next.lastReview) {
     for (const crisisId of [...next.crises]) {
       const crisis = CARD_BY_ID[crisisId]
       const clearer = crisis?.clearedBy
+      const rating = clearer ? next.lastReview.ratings[clearer] : undefined
       if (
         clearer &&
         next.slotted.includes(clearer) &&
-        (next.lastReview.ratings[clearer] === 'consistent' ||
-          next.lastReview.ratings[clearer] === 'roleModel')
+        (rating === 'emerging' || rating === 'consistent' || rating === 'roleModel')
       ) {
         next.crises = next.crises.filter((id) => id !== crisisId)
-        next.slotted = next.slotted.filter((id) => id !== crisisId)
-        pushLog(next, `Cleared crisis: ${crisis.name}`, 'good')
+        pushLog(next, `Cleared crisis: ${crisis?.name} (via ${CARD_BY_ID[clearer]?.name}).`, 'good')
       }
     }
   }
 
-  if (ready) {
+  if (canPromoteNormal(next)) {
     next.screen = 'promotion'
     pushLog(next, 'Promotion ready. Mentor review unlocked.', 'good')
     return next
   }
 
-  // Early promotion: same bar as Self (months + milestones + gate + growth floor)
-  const early = promotionReady(next)
-  if (early.earlyOk) {
+  if (canPromoteEarly(next)) {
     next.screen = 'promotion'
     pushLog(next, 'Milestone route: early promotion review.', 'good')
     return next
   }
 
   next.screen = 'cards'
-  pushLog(next, 'Set your loadout for the next six months.', 'neutral')
+  if (next.crises.length) {
+    const hints = next.crises
+      .map((id) => {
+        const c = CARD_BY_ID[id]
+        return c?.clearedBy ? `${c.name} ← ${CARD_BY_ID[c.clearedBy]?.name}` : c?.name
+      })
+      .join('; ')
+    pushLog(next, `Crisis lock — clear before promotion: ${hints}`, 'warn')
+  } else {
+    pushLog(next, 'Set your loadout for the next six months.', 'neutral')
+  }
   return next
 }
 
@@ -1056,6 +1097,10 @@ export function promote(state: GameState, keepHabitId?: string): GameState {
   next.milestonesHit = []
   next.milestoneProgress = {}
   next.crises = []
+  // Soft-reset Growth — carry 30% so the next grade is a real chase again
+  const carried = Math.floor(next.growthBanked * 0.3)
+  next.growthBanked = carried
+  next.resources.growth = carried
   next.celebrationSlots = 1
   next.celebrationExpires = next.turn + 6
   next.projects = demoProjects(nextId)
@@ -1146,14 +1191,16 @@ function applyEventChoice(
   const burnout = next.burnoutTurns > 0
   for (const [k, v] of Object.entries(choice.effects)) {
     if (k === 'hours') next.resources.hours = Math.max(0, next.resources.hours + (v as number))
-    else if (k === 'commitmentPath')
-      next.pendingCommitment = (next.pendingCommitment ?? 0) + (v as number)
-    else if (k in next.resources)
+    else if (k === 'commitmentPath') {
+      const delta = Math.max(-1, Math.min(2, v as number))
+      next.pendingCommitment = Math.min(3, Math.max(0, (next.pendingCommitment ?? 0) + delta))
+    } else if (k in next.resources)
       applyResource(next.resources, k as keyof Resources, v as number, burnout)
   }
-  if (choice.drawsCornerCut && !next.crises.includes('corner-cut')) {
-    next.crises.push('corner-cut')
-    pushLog(next, 'Corner Cut Crisis: professional commitment neglected.', 'bad')
+  if (choice.drawsCornerCut) {
+    if (drawCrisis(next, 'corner-cut')) {
+      pushLog(next, 'Corner Cut Crisis: professional commitment neglected.', 'bad')
+    }
   }
   if (ev.elements?.length) {
     const effectiveClaim = choice.drawsCornerCut ? 'we' : claim
@@ -1164,9 +1211,8 @@ function applyEventChoice(
       claim: effectiveClaim,
       note: choice.result,
     })
-    // Unplanned CPD flavour for ethics/safety learning moments
     if (ev.elements.some((e) => e.startsWith('E')) && effectiveClaim !== 'we') {
-      next.cpd.unplannedHours += 2
+      addCpdHours(next, 2, false)
     }
   }
   pushLog(next, `Event: ${ev.title} — ${choice.result}`, 'neutral')
@@ -1331,6 +1377,8 @@ export function resolveInbox(
 export {
   topGaps,
   promotionReady,
+  promotionBlockers,
+  crisisClearHint,
   growthNeedFor,
   monthInCycle,
 } from './progress'
