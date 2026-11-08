@@ -10,6 +10,7 @@ import {
   performAction,
   promote,
   resolveEventChoice,
+  resolveInbox,
   saveGame,
   setScreen,
   toggleCard,
@@ -26,6 +27,7 @@ type Action =
   | { type: 'promote'; keepHabitId?: string }
   | { type: 'afterPromo' }
   | { type: 'event'; choiceId: string }
+  | { type: 'inbox'; defId: string; choiceId: string }
   | { type: 'reset' }
   | { type: 'tipSeen' }
 
@@ -54,6 +56,8 @@ function reducer(state: GameState | null, action: Action): GameState | null {
       return state ? continueAfterPromotion(state) : state
     case 'event':
       return state ? resolveEventChoice(state, action.choiceId) : state
+    case 'inbox':
+      return state ? resolveInbox(state, action.defId, action.choiceId) : state
     case 'tipSeen':
       return state ? { ...state, tipSeen: true } : state
     default:

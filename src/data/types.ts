@@ -115,6 +115,8 @@ export interface ActionDef {
   blurb: string
   hours: number
   tags: string[]
+  /** Skills this action builds evidence for (at the live project stage). */
+  skills?: SkillId[]
   effects: Partial<{
     competence: number
     reputation: number
@@ -174,6 +176,33 @@ export interface GridCell {
   level: number
   selfRating: number
   revealed: boolean
+  /** Evidence points toward the next level. */
+  evidence: number
+  /** Feedback has confirmed level ≥ 3. */
+  confirmed: boolean
+}
+
+export interface FeedbackLogEntry {
+  turn: number
+  source: string
+  text: string
+  skill?: SkillId
+  stage?: StageId
+  thought?: number
+  actual?: number
+}
+
+export interface InboxItem {
+  defId: string
+  monthsLeft: number
+  resolved?: boolean
+}
+
+export interface TieState {
+  id: string
+  name: string
+  role: string
+  strength: number
 }
 
 export interface LogEntry {
@@ -203,6 +232,8 @@ export interface GameState {
   turn: number
   monthInGrade: number
   resources: Resources
+  /** Yield snapshot at the start of the current month — strip shows plan deltas vs this. */
+  monthStartResources: Resources
   paths: PathScores
   growthBanked: number
   slotted: string[]
@@ -215,11 +246,20 @@ export interface GameState {
   celebrationExpires: number
   specialistWaive: PathId | null
   milestonesHit: string[]
+  /** Progress counters toward milestone targets. */
+  milestoneProgress: Record<string, number>
   grid: GridCell[]
   projects: ProjectDef[]
   actionsThisMonth: string[]
   actionsThisReview: string[]
+  /** Month numbers (1–6 within cycle) when each action id was taken — for rating spread. */
+  actionMonthsThisReview: Record<string, number[]>
   pendingEvent: string | null
+  inbox: InboxItem[]
+  inboxUsed: string[]
+  ties: TieState[]
+  feedbackLog: FeedbackLogEntry[]
+  positiveFeedbackThisReview: boolean
   reviewsDone: number
   lastReview: ReviewSnapshot | null
   log: LogEntry[]
@@ -228,4 +268,6 @@ export interface GameState {
   ended: null | { win: boolean; path?: string; epilogue: string }
   burnoutTurns: number
   justPromoted: boolean
+  /** Visible wellbeing floor; at or below triggers Burnout. */
+  wellbeingFloor: number
 }

@@ -1,19 +1,33 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { ActionYields } from '../components/ActionYields'
 import { CARD_BY_ID } from '../data/cards'
+import { deskifyCardText as deskify } from '../data/deskNames'
 import { GRADES } from '../data/grades'
-import type { GameState } from '../data/types'
-import { PathBars } from '../components/PathBars'
+import type { GameState, Resources } from '../data/types'
+import { FoundingCharter } from '../components/FoundingCharter'
+import { PathExplain } from '../components/PathExplain'
 import { YieldStrip } from '../components/YieldStrip'
-import { canAfford, monthActions, slotCount } from '../game/engine'
+import { INBOX_POOL } from '../data/inbox'
+import {
+  actionYieldPreview,
+  canAfford,
+  monthActions,
+  monthPlanYieldDeltas,
+  slotCount,
+  timesUsedThisMonth,
+} from '../game/engine'
 
 export function DeskScreen({
   state,
   onAction,
+  onInbox,
   onEndMonth,
   onDismissTip,
 }: {
   state: GameState
   onAction: (id: string) => void
+  onInbox: (defId: string, choiceId: string) => void
   onEndMonth: () => void
   onDismissTip: () => void
 }) {
@@ -21,16 +35,25 @@ export function DeskScreen({
   const grade = GRADES[state.grade]
   const project = state.projects[0]
   const slots = slotCount(state)
+  const monthPlan = monthPlanYieldDeltas(state)
+  const [hoverPreview, setHoverPreview] = useState<Partial<Record<keyof Resources, number>> | null>(
+    null,
+  )
 
   return (
     <section className="screen stack">
-      <YieldStrip resources={state.resources} burnout={state.burnoutTurns > 0} />
+      <YieldStrip
+        resources={state.resources}
+        burnout={state.burnoutTurns > 0}
+        monthPlan={monthPlan}
+        hoverPreview={hoverPreview}
+        wellbeingFloor={state.wellbeingFloor}
+      />
 
       {!state.tipSeen && (
         <div className="tip" style={{ color: 'var(--paper)' }}>
-          <strong>How a month works:</strong> spend Hours on actions, keep at least one Habit and one
-          Specialism slotted, then End month. Every sixth month is a Review that scores your four
-          paths.
+          <strong>How a month works:</strong> −8h blocks stack. Clear the Inbox before deadlines.
+          Wellbeing ≤ {state.wellbeingFloor} triggers Burnout. Tap ? on paths for M1/M2 help.
           <div style={{ marginTop: '0.6rem' }}>
             <button className="btn btn-primary" onClick={onDismissTip}>
               Got it
@@ -53,26 +76,99 @@ export function DeskScreen({
             </div>
           </div>
 
-          <div className="stack">
-            {actions.map((action, i) => (
-              <motion.button
-                key={action.id}
-                className="action-row"
-                disabled={!canAfford(state, action)}
-                onClick={() => onAction(action.id)}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i * 0.03, 0.3) }}
-              >
+          {!!state.inbox.filter((i) => !i.resolved).length && (
+            <div className="inbox-block">
+              <div className="section-head">
                 <div>
-                  <div className="action-title">{action.name}</div>
-                  <div className="action-blurb">{action.blurb}</div>
+                  <p className="eyebrow" style={{ color: 'var(--signal)' }}>
+                    Inbox · {state.inbox.filter((i) => !i.resolved).length} to decide
+                  </p>
+                  <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
+                    Each choice costs hours or a relationship. Late cards cause rework.
+                  </p>
                 </div>
-                <div className="hours-pill">
-                  {action.hours < 0 ? `+${Math.abs(action.hours)}h` : `−${action.hours}h`}
-                </div>
-              </motion.button>
-            ))}
+              </div>
+              <div className="stack">
+                {state.inbox
+                  .filter((i) => !i.resolved)
+                  .map((item) => {
+                    const def = INBOX_POOL.find((d) => d.id === item.defId)
+                    if (!def) return null
+                    return (
+                      <div className="inbox-card" key={item.defId}>
+                        <div className="inbox-title">
+                          {def.title}{' '}
+                          <span className="muted">
+                            · {item.monthsLeft} mo left · from {def.from}
+                          </span>
+                        </div>
+                        <p className="action-blurb">{def.body}</p>
+                        <p className="muted" style={{ fontSize: '0.8rem' }}>
+                          If late: {def.ifLate}
+                        </p>
+                        <div className="inbox-choices">
+                          {def.choices.map((c) => (
+                            <button
+                              key={c.id}
+                              className="btn btn-ghost"
+                              style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}
+                              type="button"
+                              disabled={(c.hours ?? 0) > state.resources.hours}
+                              onClick={() => onInbox(def.id, c.id)}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
+
+          <div className="stack">
+            {actions.map((action, i) => {
+              const used = timesUsedThisMonth(state, action.id)
+              const affordable = canAfford(state, action)
+              return (
+                <motion.button
+                  key={action.id}
+                  className={`action-row${used > 0 ? ' action-row-used' : ''}`}
+                  disabled={!affordable}
+                  onClick={() => onAction(action.id)}
+                  onMouseEnter={() => {
+                    const p = actionYieldPreview(state, action)
+                    setHoverPreview({ hours: p.hoursDelta, ...p.resources })
+                  }}
+                  onMouseLeave={() => setHoverPreview(null)}
+                  onFocus={() => {
+                    const p = actionYieldPreview(state, action)
+                    setHoverPreview({ hours: p.hoursDelta, ...p.resources })
+                  }}
+                  onBlur={() => setHoverPreview(null)}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                >
+                  <div>
+                    <div className="action-title-row">
+                      <div className="action-title">{action.name}</div>
+                      {used > 0 && (
+                        <span className="action-count" title="Times selected this month">
+                          ×{used}
+                        </span>
+                      )}
+                    </div>
+                    <div className="action-blurb">{action.blurb}</div>
+                    <ActionYields state={state} action={action} />
+                  </div>
+                  <div className="hours-pill">
+                    {action.hours < 0 ? `+${Math.abs(action.hours)}h` : `−${action.hours}h`}
+                  </div>
+                </motion.button>
+              )
+            })}
           </div>
 
           <div style={{ marginTop: '1rem', display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
@@ -81,6 +177,9 @@ export function DeskScreen({
             </button>
             <span className="muted" style={{ alignSelf: 'center', fontSize: '0.88rem' }}>
               Next review in {6 - ((state.monthInGrade - 1) % 6)} month(s)
+              {state.resources.hours >= 8
+                ? ` · ${Math.floor(state.resources.hours / 8)} unutilized block(s) still available`
+                : ''}
             </span>
           </div>
         </div>
@@ -103,12 +202,33 @@ export function DeskScreen({
               {project?.progress}% complete
             </div>
             <p style={{ fontSize: '0.9rem', color: 'var(--steel)' }}>
-              Impact band: {Object.entries(grade.impact)
+              Impact band:{' '}
+              {Object.entries(grade.impact)
                 .filter(([, v]) => v === 'high')
                 .map(([k]) => k)
                 .join(', ') || 'learning'}{' '}
               pays full project yield.
             </p>
+          </div>
+
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Your network
+            </p>
+            <div className="stack">
+              {state.ties.map((t) => (
+                <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <span>
+                    <strong>{t.name}</strong> · {t.role}
+                  </span>
+                  <span className="tie-dots" aria-label={`Tie ${t.strength} of 3`}>
+                    {[0, 1, 2].map((i) => (
+                      <i key={i} className={i < t.strength ? 'on' : ''} />
+                    ))}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="panel" style={{ padding: '1.1rem' }}>
@@ -126,22 +246,20 @@ export function DeskScreen({
                 return (
                   <div key={id} style={{ fontSize: '0.92rem' }}>
                     <strong>{card?.name ?? id}</strong>
-                    <div className="muted">{card?.effect}</div>
+                    <div className="muted">{card ? deskify(card.effect) : ''}</div>
                   </div>
                 )
               })}
               {!state.slotted.length && <div className="muted">No cards slotted.</div>}
             </div>
-            <p className="tip" style={{ marginTop: '0.85rem', color: 'var(--ink)' }}>
-              Founding Charter: Second Pair of Eyes is always on — QA before issue, CPD stays live.
-            </p>
           </div>
 
           <div className="panel" style={{ padding: '1.1rem' }}>
-            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
-              Promotion paths
-            </p>
-            <PathBars paths={state.paths} grade={state.grade} compact />
+            <FoundingCharter />
+          </div>
+
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <PathExplain state={state} />
           </div>
 
           <div className="panel-dark" style={{ padding: '1.1rem' }}>

@@ -28,7 +28,14 @@ export default function App() {
       <div className="blueprint-grid" aria-hidden />
       {state && screen !== 'title' && screen !== 'character' && screen !== 'win' && (
         <div className="screen" style={{ paddingBottom: 0 }}>
-          <TopNav state={state} onScreen={(s) => dispatch({ type: 'screen', screen: s })} />
+          <TopNav
+            state={state}
+            onScreen={(s) => dispatch({ type: 'screen', screen: s })}
+            onNewCareer={() => {
+              dispatch({ type: 'reset' })
+              setPicking(true)
+            }}
+          />
         </div>
       )}
 
@@ -64,12 +71,19 @@ export default function App() {
         <DeskScreen
           state={state}
           onAction={(id) => dispatch({ type: 'act', actionId: id })}
+          onInbox={(defId, choiceId) => dispatch({ type: 'inbox', defId, choiceId })}
           onEndMonth={() => dispatch({ type: 'endMonth' })}
           onDismissTip={() => dispatch({ type: 'tipSeen' })}
         />
       )}
 
-      {state && screen === 'self' && <SelfScreen state={state} />}
+      {state && screen === 'self' && (
+        <SelfScreen
+          state={state}
+          onAskFeedback={() => dispatch({ type: 'act', actionId: 'ask-feedback' })}
+          onPlanGaps={() => dispatch({ type: 'screen', screen: 'desk' })}
+        />
+      )}
 
       {state && screen === 'cards' && (
         <CardsScreen
