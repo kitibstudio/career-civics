@@ -7,7 +7,7 @@ import {
   startingSpecialism,
 } from '../data/cards'
 import { CHARACTERS } from '../data/characters'
-import { GRADES, PATH_ORDER, STAGE_ORDER, gateConfig } from '../data/grades'
+import { GRADES, PATH_LABELS, PATH_ORDER, STAGE_ORDER, gateConfig } from '../data/grades'
 import { INBOX_POOL, inboxForGrade } from '../data/inbox'
 import {
   defaultActionPlan,
@@ -37,11 +37,13 @@ import { canPromoteNormal } from './promotion'
 import type {
   ActionDef,
   CardDef,
+  CareerHistoryEntry,
   ClaimRole,
   GameState,
   GradeId,
   GridCell,
   PathId,
+  PathLine,
   PathScores,
   Rating,
   Resources,
@@ -76,6 +78,10 @@ function clone<T>(v: T): T {
 
 function pushLog(state: GameState, text: string, tone: GameState['log'][0]['tone'] = 'neutral') {
   state.log = [{ turn: state.turn, text, tone }, ...state.log].slice(0, 40)
+}
+
+function pushHistory(state: GameState, entry: CareerHistoryEntry) {
+  state.careerHistory = [...(state.careerHistory ?? []), entry].slice(-60)
 }
 
 function makeGrid(skills: Record<SkillId, number>): GridCell[] {
@@ -208,6 +214,7 @@ export function createNewGame(
     positiveFeedbackThisReview: false,
     reviewsDone: 0,
     lastReview: null,
+    careerHistory: [],
     log: [],
     tipSeen: false,
     software: {
@@ -390,8 +397,10 @@ export function actionYieldPreview(
 
   let reviewHint: string | undefined
   if (action.id === 'unutilized') {
-    reviewHint =
-      'Yields while idle: Fee & Wellbeing fall; Competence, Reputation, Network, Growth earn nothing. Delivery path −1 per block at Review.'
+    const idle = state.actionsThisReview.filter((id) => id === 'unutilized').length
+    reviewHint = `Costs −1 Delivery path per block at Review${
+      idle ? ` (×${idle} this cycle already = −${idle} Delivery)` : ''
+    }. Fee & Wellbeing fall now; nothing else is earned.`
   }
 
   return {
@@ -594,7 +603,7 @@ export function endMonth(state: GameState): GameState {
     const suggested = Math.floor(leftover / 8)
     pushLog(
       next,
-      `${leftover}h left unspent. Log Unutilized (−8h) ${suggested}× next time — idle yields: −Fee, −Wellbeing now; flat Competence/Reputation/Network/Growth; Delivery path −1 each at Review.`,
+      `${leftover}h left unspent (${suggested} block${suggested === 1 ? '' : 's'}). Next month put them into actions that feed your weakest path — logging them as Unutilized costs −1 Delivery each at Review.`,
       'warn',
     )
   } else if (idleBlocks >= 3) {
@@ -723,6 +732,202 @@ function autoRate(state: GameState, cardId: string): Rating {
   return rateCard(state, cardId, card.path, card.kind)
 }
 
+export const RATING_LABELS: Record<Rating, string> = {
+  notShown: 'Not shown',
+  emerging: 'Emerging',
+  consistent: 'Consistent',
+  roleModel: 'Role model',
+}
+
+function emptyLines(): Record<PathId, PathLine[]> {
+  return { delivery: [], technical: [], collaboration: [], leadership: [], commitment: [] }
+}
+
+export interface NeglectRisk {
+  fed: boolean
+  /** Unfed-Review streak after this Review (0 when fed or waived). */
+  streakAfter: number
+  threshold: number
+  /** What lands if this Review leaves the path unfed at threshold. */
+  consequence: null | { kind: 'drift' } | { kind: 'crisis'; crisisId: string }
+}
+
+export interface ReviewBreakdown {
+  ratings: Record<string, Rating>
+  /** Everything except neglect Drift, which depends on the neglect counters mutating. */
+  delta: PathScores
+  lines: Record<PathId, PathLine[]>
+  happiness: number
+  cardGrowth: number
+  commitDelta: number
+  moralePenalty: boolean
+  crisisNotes: string[]
+  idleBlocks: number
+  neglect: Record<PathId, NeglectRisk>
+}
+
+const PATH_FEEDING_ACTIONS: Record<PathId, string[]> = {
+  delivery: ['drawing-set', 'design-review', 'timesheets'],
+  technical: ['calc-package', 'model-layouts', 'automate', 'cpd-friday', 'learn-revit'],
+  collaboration: ['work-across', 'client-meeting', 'clash-cycle', 'lunch-learn', 'site-visit'],
+  leadership: ['ask-mentor', 'mentor-junior', 'peer-check', 'ask-feedback'],
+  commitment: [],
+}
+
+/** Itemised Review scoring from the current cycle's evidence. Pure — safe for live Desk previews. */
+export function computeReviewBreakdown(state: GameState): ReviewBreakdown {
+  let ratings: Record<string, Rating> = {}
+  for (const id of state.slotted) ratings[id] = autoRate(state, id)
+  ratings = enforceRoleModelCap(state.grade, ratings)
+
+  const actionCounts = state.actionsThisReview.reduce<Record<string, number>>((acc, id) => {
+    acc[id] = (acc[id] ?? 0) + 1
+    return acc
+  }, {})
+  const disciplineCount = Math.max(2, state.projects[0]?.allies.length ?? 2)
+  const cfg = gateConfig(state.grade)
+  const delta = emptyPaths()
+  const lines = emptyLines()
+  const add = (p: PathId, amount: number, label: string, kind: PathLine['kind']) => {
+    delta[p] += amount
+    lines[p].push({ label, amount, kind })
+  }
+  let happiness = 0
+  let cardGrowth = 0
+  const crisisNotes: string[] = []
+
+  for (const p of PATHS) add(p, cfg.base, 'Base (every Review)', 'base')
+
+  const pathCarded = emptyPaths()
+  for (const id of state.slotted) {
+    const card = CARD_BY_ID[id]
+    if (!card) continue
+    if (card.kind === 'crisis') {
+      const pen = card.penalty ?? {}
+      for (const p of PATHS) {
+        if (typeof pen[p] === 'number') add(p, pen[p] as number, `Crisis: ${card.name}`, 'crisis')
+      }
+      happiness += pen.happiness ?? 0
+      crisisNotes.push(`Crisis ${card.name} bites.`)
+      continue
+    }
+    if (state.specialistWaive && card.path === state.specialistWaive) continue
+    const scored = scoreCard(card, ratings[id], actionCounts, disciplineCount)
+    let pts = scored.points
+    if (state.specialistWaive && scored.path === 'technical') pts = Math.floor(pts * 1.5)
+    add(scored.path, pts, `${card.name} card · rated ${RATING_LABELS[ratings[id]]}`, 'card')
+    pathCarded[scored.path] += 1
+    happiness += scored.happiness
+    cardGrowth += scored.growth
+  }
+
+  for (const id of state.slotted) {
+    const card = CARD_BY_ID[id]
+    if (card?.kind !== 'cross') continue
+    const lineage = state.slotted.filter((sid) => CARD_BY_ID[sid]?.kind === 'specialism').length
+    const bonus = Math.min(2, lineage)
+    if (bonus) add('collaboration', bonus, `${card.name} lineage (specialisms slotted)`, 'lineage')
+  }
+
+  const rawCommit =
+    commitmentPathDeltaFromActions(actionCounts) + Math.min(2, state.pendingCommitment ?? 0)
+  const commitDelta = Math.min(3, rawCommit)
+  if (commitDelta) add('commitment', commitDelta, 'Desk commitment work & events (cap +3)', 'commitment')
+
+  const moralePenalty =
+    ['senior', 'associate', 'bimLead', 'leadCoordinator'].includes(state.grade) && happiness < 0
+  if (moralePenalty) for (const p of PATHS) add(p, -1, 'Team morale check failed', 'morale')
+
+  const gradeDef = GRADES[state.grade]
+  for (const m of gradeDef.milestones) {
+    if (state.milestonesHit.includes(m.id)) add(m.path, 1, `Milestone: ${m.label}`, 'milestone')
+  }
+
+  // Each −8h idle block this cycle costs −1 Delivery (no billable output).
+  const idleBlocks = actionCounts['unutilized'] ?? 0
+  if (idleBlocks > 0) add('delivery', -idleBlocks, `Unutilized time ×${idleBlocks} (−1 each)`, 'idle')
+
+  for (const p of PATHS) {
+    if (pathCarded[p] > 0 || p === 'commitment') continue
+    const n = PATH_FEEDING_ACTIONS[p].reduce((s, id) => s + (actionCounts[id] ?? 0), 0)
+    if (n > 0) {
+      lines[p].push({
+        label: `${n} ${PATH_LABELS[p]} action${n === 1 ? '' : 's'} scored nothing — no ${PATH_LABELS[p]} card slotted`,
+        amount: 0,
+        kind: 'hint',
+      })
+    }
+  }
+
+  const neglectThreshold = state.grade === 'graduate' || state.grade === 'technician' ? 3 : 2
+  const neglect = {} as Record<PathId, NeglectRisk>
+  for (const p of PATHS) {
+    // Graduate/Technician: commitment neglect is softer (threshold +1)
+    const threshold =
+      p === 'commitment' && (state.grade === 'graduate' || state.grade === 'technician')
+        ? neglectThreshold + 1
+        : neglectThreshold
+    if (state.specialistWaive === p) {
+      neglect[p] = { fed: true, streakAfter: 0, threshold, consequence: null }
+      continue
+    }
+    const fed = pathCarded[p] > 0 || (p === 'commitment' && commitDelta > 0)
+    const streakAfter = fed ? 0 : (state.neglect[p] ?? 0) + 1
+    let consequence: NeglectRisk['consequence'] = null
+    if (streakAfter >= threshold) {
+      const crisisId = crisisForPath(state.grade, p)
+      if (crisisId === 'drift') consequence = { kind: 'drift' }
+      else if (crisisId && !state.crises.includes(crisisId)) consequence = { kind: 'crisis', crisisId }
+    }
+    neglect[p] = { fed, streakAfter, threshold, consequence }
+  }
+
+  return {
+    ratings,
+    delta,
+    lines,
+    happiness,
+    cardGrowth,
+    commitDelta,
+    moralePenalty,
+    crisisNotes,
+    idleBlocks,
+    neglect,
+  }
+}
+
+export interface ReviewProjection {
+  breakdown: ReviewBreakdown
+  delta: PathScores
+  lines: Record<PathId, PathLine[]>
+  totals: PathScores
+  gatePass: boolean
+  monthsToReview: number
+}
+
+/** "If the Review were held today" — current cycle evidence projected onto path totals. */
+export function projectReview(state: GameState): ReviewProjection {
+  const breakdown = computeReviewBreakdown(state)
+  const delta = { ...breakdown.delta }
+  const lines = clone(breakdown.lines)
+  for (const p of PATHS) {
+    if (breakdown.neglect[p].consequence?.kind === 'drift') {
+      delta[p] -= 2
+      lines[p].push({ label: `${PATH_LABELS[p]} Drift — unfed ${breakdown.neglect[p].streakAfter} Reviews`, amount: -2, kind: 'neglect' })
+    }
+  }
+  const totals = emptyPaths()
+  for (const p of PATHS) totals[p] = state.paths[p] + delta[p]
+  return {
+    breakdown,
+    delta,
+    lines,
+    totals,
+    gatePass: checkGate(totals, gateConfig(state.grade), state.specialistWaive, state.grade),
+    monthsToReview: 6 - monthInCycle(state) + 1,
+  }
+}
+
 export function beginReview(state: GameState): GameState {
   const next = clone(state)
   // Resolve overdue inbox
@@ -736,140 +941,67 @@ export function beginReview(state: GameState): GameState {
     }
   }
 
-  let ratings: Record<string, Rating> = {}
-  for (const id of next.slotted) ratings[id] = autoRate(next, id)
-  ratings = enforceRoleModelCap(next.grade, ratings)
-
-  const actionCounts = next.actionsThisReview.reduce<Record<string, number>>((acc, id) => {
-    acc[id] = (acc[id] ?? 0) + 1
-    return acc
-  }, {})
-  const disciplineCount = Math.max(2, next.projects[0]?.allies.length ?? 2)
+  const bd = computeReviewBreakdown(next)
+  const { ratings, commitDelta, moralePenalty } = bd
   const cfg = gateConfig(next.grade)
-  const delta = emptyPaths()
-  let happiness = 0
-  let growthGain = 0
-  const notes: string[] = []
+  const delta = { ...bd.delta }
+  const pathLines = clone(bd.lines)
+  let growthGain = bd.cardGrowth
+  const notes: string[] = [...bd.crisisNotes]
+  const slotsUsed = next.slotted.filter((id) => !next.crises.includes(id)).length
+  const slotsMax = slotCount(next)
 
-  // base points each path
-  for (const p of PATHS) delta[p] += cfg.base
-
-  // card scores
-  const pathCarded = emptyPaths()
-  for (const id of next.slotted) {
-    const card = CARD_BY_ID[id]
-    if (!card) continue
-    if (card.kind === 'crisis') {
-      const pen = card.penalty ?? {}
-      for (const p of PATHS) {
-        if (typeof pen[p] === 'number') delta[p] += pen[p] as number
-      }
-      happiness += pen.happiness ?? 0
-      notes.push(`Crisis ${card.name} bites.`)
-      continue
-    }
-    if (next.specialistWaive && card.path === next.specialistWaive) continue
-    const scored = scoreCard(card, ratings[id], actionCounts, disciplineCount)
-    let pts = scored.points
-    if (next.specialistWaive && scored.path === 'technical') pts = Math.floor(pts * 1.5)
-    delta[scored.path] += pts
-    pathCarded[scored.path] += 1
-    happiness += scored.happiness
-    growthGain += scored.growth
-  }
-
-  // lineage bonus for cross cards
-  for (const id of next.slotted) {
-    const card = CARD_BY_ID[id]
-    if (card?.kind !== 'cross') continue
-    const lineage = next.slotted.filter((sid) => CARD_BY_ID[sid]?.kind === 'specialism').length
-    delta.collaboration += Math.min(2, lineage)
-  }
-
-  // Commitment path from desk evidence + banked event choices (capped)
-  const rawCommit =
-    commitmentPathDeltaFromActions(actionCounts) + Math.min(2, next.pendingCommitment ?? 0)
-  const commitDelta = Math.min(3, rawCommit)
   if (commitDelta) {
-    delta.commitment += commitDelta
     notes.push(
       `Commitment: +${commitDelta} (desk/events; soft-capped at +3 this Review)`,
     )
   }
   next.pendingCommitment = 0
 
-  // neglect
   const crisesDrawn: string[] = []
-  const neglectThreshold = next.grade === 'graduate' || next.grade === 'technician' ? 3 : 2
   for (const p of PATHS) {
-    if (next.specialistWaive === p) {
+    const risk = bd.neglect[p]
+    next.neglect[p] = risk.streakAfter
+    if (next.neglect[p] < risk.threshold) continue
+    const crisisId = crisisForPath(next.grade, p)
+    if (crisisId === 'drift') {
+      delta[p] -= 2
+      pathLines[p].push({ label: `${PATH_LABELS[p]} Drift — no ${PATH_LABELS[p]} card for ${risk.streakAfter} Reviews`, amount: -2, kind: 'neglect' })
+      notes.push(`${p} Drift (−2).`)
       next.neglect[p] = 0
-      continue
-    }
-    // Graduate/Technician: commitment neglect is softer (threshold +1)
-    const thresh =
-      p === 'commitment' && (next.grade === 'graduate' || next.grade === 'technician')
-        ? neglectThreshold + 1
-        : neglectThreshold
-    const fed =
-      pathCarded[p] > 0 ||
-      (p === 'commitment' && commitDelta > 0)
-    if (!fed) next.neglect[p] += 1
-    else next.neglect[p] = 0
-
-    if (next.neglect[p] >= thresh) {
-      const crisisId = crisisForPath(next.grade, p)
-      if (crisisId === 'drift') {
-        delta[p] -= 2
-        notes.push(`${p} Drift (−2).`)
-        next.neglect[p] = 0
-      } else if (crisisId && !next.crises.includes(crisisId)) {
-        if (drawCrisis(next, crisisId)) {
-          crisesDrawn.push(crisisId)
-          notes.push(
-            `Crisis drawn: ${CARD_BY_ID[crisisId]?.name}. Slot its clearer habit on Cards before promotion.`,
-          )
-        }
-        next.neglect[p] = 0
+    } else if (crisisId && !next.crises.includes(crisisId)) {
+      if (drawCrisis(next, crisisId)) {
+        crisesDrawn.push(crisisId)
+        notes.push(
+          `Crisis drawn: ${CARD_BY_ID[crisisId]?.name}. Slot its clearer habit on Cards before promotion.`,
+        )
       }
+      next.neglect[p] = 0
     }
   }
 
-  // DAP revisit note
   next.actionPlan.lastReviewedTurn = next.turn
   notes.push(
     `Development Action Plan revisited: short “${next.actionPlan.short.slice(0, 48)}…”`,
   )
 
-  // morale check
-  let moralePenalty = false
-  if (['senior', 'associate', 'bimLead', 'leadCoordinator'].includes(next.grade) && happiness < 0) {
-    for (const p of PATHS) delta[p] -= 1
-    moralePenalty = true
-    notes.push('Morale check failed: −1 all paths.')
-  }
+  if (moralePenalty) notes.push('Morale check failed: −1 all paths.')
 
-  // milestones evidence
-  const gradeDef = GRADES[next.grade]
-  for (const m of gradeDef.milestones) {
-    if (next.milestonesHit.includes(m.id)) delta[m.path] += 1
-  }
-
-  // Unutilized time: each −8h idle block this cycle costs −1 Delivery path
-  // (no billable output). Yield hits (−1 Fee, −1 Wellbeing; other yields flat) already applied on select.
-  const idleBlocks = actionCounts['unutilized'] ?? 0
-  if (idleBlocks > 0) {
-    delta.delivery -= idleBlocks
+  if (bd.idleBlocks > 0) {
     notes.push(
-      `Unutilized ×${idleBlocks}: yields already logged (−Fee/−Wellbeing per block; Competence/Reputation/Network/Growth earned nothing). Delivery path −${idleBlocks} this Review.`,
+      `Unutilized ×${bd.idleBlocks}: yields already logged (−Fee/−Wellbeing per block; Competence/Reputation/Network/Growth earned nothing). Delivery path −${bd.idleBlocks} this Review.`,
     )
   }
 
-  // round down / apply
   for (const p of PATHS) {
     delta[p] = Math.floor(delta[p])
     next.paths[p] += delta[p]
   }
+
+  const actionCounts = next.actionsThisReview.reduce<Record<string, number>>((acc, id) => {
+    acc[id] = (acc[id] ?? 0) + 1
+    return acc
+  }, {})
 
   // Growth: tighter caps so a grade takes several Reviews
   const cpdBlocks =
@@ -899,9 +1031,23 @@ export function beginReview(state: GameState): GameState {
     gatePass,
     moralePenalty,
     notes,
+    pathLines,
+    slotsUsed,
+    slotsMax,
   }
   next.lastReview = snapshot
   next.reviewsDone += 1
+  pushHistory(next, {
+    kind: 'review',
+    turn: next.turn,
+    grade: next.grade,
+    monthInGrade: next.monthInGrade,
+    pathTotals: { ...next.paths },
+    pathDelta: { ...delta },
+    gatePass,
+    streak: next.consecutiveGate,
+    growthBanked: next.growthBanked,
+  })
   next.actionsThisReview = []
   next.actionMonthsThisReview = {}
   next.positiveFeedbackThisReview = false
@@ -1095,6 +1241,13 @@ export function promote(state: GameState, keepHabitId?: string): GameState {
     }
   }
 
+  pushHistory(next, {
+    kind: 'promotion',
+    turn: next.turn,
+    grade: next.grade,
+    monthInGrade: next.monthInGrade,
+    toGrade: nextId,
+  })
   next.grade = nextId
   next.monthInGrade = 1
   next.paths = emptyPaths()
@@ -1324,6 +1477,23 @@ export function loadGame(): GameState | null {
     }
     if (state.pendingClaim === undefined) state.pendingClaim = null
     if (state.pendingCommitment == null) state.pendingCommitment = 0
+    if (!state.careerHistory) {
+      state.careerHistory = state.lastReview
+        ? [
+            {
+              kind: 'review',
+              turn: state.lastReview.turn,
+              grade: state.grade,
+              monthInGrade: state.monthInGrade,
+              pathTotals: { ...state.lastReview.pathTotals },
+              pathDelta: { ...state.lastReview.pathDelta },
+              gatePass: state.lastReview.gatePass,
+              streak: state.consecutiveGate,
+              growthBanked: state.growthBanked,
+            },
+          ]
+        : []
+    }
     ensureChartership(state)
     for (const cell of state.grid ?? []) {
       if (cell.evidence == null) cell.evidence = cell.level >= 1 ? 2 : 0
