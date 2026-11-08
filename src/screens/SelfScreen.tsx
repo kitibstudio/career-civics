@@ -1,4 +1,10 @@
-import { GRADES, PATH_LABELS, PATH_ORDER, SKILL_LABELS, STAGE_LABELS, STAGE_ORDER } from '../data/grades'
+import {
+  GRADES,
+  PATH_LABELS,
+  SKILL_LABELS,
+  STAGE_LABELS,
+  STAGE_ORDER,
+} from '../data/grades'
 import { CHARACTERS } from '../data/characters'
 import {
   BODY_LABELS,
@@ -7,12 +13,14 @@ import {
   UK_SPEC_ELEMENTS,
 } from '../data/ukSpec'
 import type { CharterBody, GameState, SkillId } from '../data/types'
+import { PathBars } from '../components/PathBars'
 import {
   canAttemptProfessionalReview,
   cpdProgress,
   expectedLevel,
   growthNeedFor,
   milestonesFor,
+  monthInCycle,
   nextGradeId,
   promotionReady,
   topGaps,
@@ -26,7 +34,7 @@ const SKILLS: SkillId[] = [
   'commercial',
 ]
 
-const FILL = ['#ffffff', '#e6e6e6', '#c4c4c4', '#8f8f8f', '#4d4d4d', '#111111']
+const FILL = ['#ffffff', '#e8eef2', '#c5d4de', '#8aa4b5', '#4a6b7c', '#1a3344']
 const STRENGTH_LABEL = {
   none: '—',
   mentioned: 'men',
@@ -57,32 +65,41 @@ export function SelfScreen({
   const nextGrade = nxt ? GRADES[nxt] : null
   const timer = grade.baseTimer
   const hiddenCount = state.grid.filter((c) => !c.revealed).length
-  const cfg = { m1: state.grade === 'graduate' || state.grade === 'technician' ? 1 : 2 }
   const cpd = cpdProgress(state)
   const reviewReady = canAttemptProfessionalReview(state)
+  const cycleMonth = monthInCycle(state)
+  const isGradOrTech = state.grade === 'graduate' || state.grade === 'technician'
+  const demonstratedCount = UK_SPEC_ELEMENTS.filter(
+    (e) =>
+      state.elementStrength[e.id] === 'demonstrated' || state.elementStrength[e.id] === 'strong',
+  ).length
 
   return (
-    <section className="screen self-mono">
-      <div className="self-panel">
-        <div className="self-header">
+    <section className="screen stack">
+      <div className="panel" style={{ padding: '1.15rem' }}>
+        <div className="section-head">
           <div>
-            <p className="self-kicker">Career Civics · Self</p>
-            <h2 className="self-title">
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Self · readiness
+            </p>
+            <h2 className="h2">
               {character?.name} · {grade.name}
               {character ? ` · ${character.discipline}` : ''}
             </h2>
-            <p className="self-sub">
+            <p className="muted">
               Month {state.monthInGrade}
-              {timer ? ` of ${timer}` : ''} · Review{' '}
-              {Math.floor((state.monthInGrade - 1) / 6) + 1} in grade
+              {timer ? ` of ${timer}` : ''} · Review cycle month {cycleMonth}/6 ·{' '}
+              {state.reviewsDone} review{state.reviewsDone === 1 ? '' : 's'} done
             </p>
           </div>
         </div>
 
-        <div className="self-ready">
+        <div className="self-ready desk-ready">
           <div>
-            <h3 className="self-ready-status">{ready.ready ? 'Ready for promotion' : 'Not yet ready'}</h3>
-            <p className="self-sub">{ready.reason}</p>
+            <h3 className="self-ready-status">
+              {ready.ready ? 'Ready for promotion' : 'Not yet ready'}
+            </h3>
+            <p className="muted">{ready.reason}</p>
           </div>
           <div className="self-ready-stats">
             <div>
@@ -100,45 +117,54 @@ export function SelfScreen({
             <div>
               Crisis in play: <strong>{state.crises.length ? state.crises.length : 'None'}</strong>
             </div>
-            <button className="self-btn" disabled={!ready.earlyOk} type="button">
+            <button className="btn btn-ghost self-early-btn" disabled={!ready.earlyOk} type="button">
               {ready.earlyOk
                 ? 'Request early promotion'
-                : `Request early promotion · ${ready.earlyMissing || 'locked'}`}
+                : `Early promotion · ${ready.earlyMissing || 'locked'}`}
             </button>
+            <p className="muted" style={{ fontSize: '0.78rem', margin: 0 }}>
+              Early route needs month {ready.minMonths}+, 3 milestones, a passed gate, and Growth
+              underway — not just ticking boxes in the first quarter.
+            </p>
           </div>
         </div>
+      </div>
 
-        <div className="self-paths">
-          {PATH_ORDER.map((p) => {
-            const v = state.paths[p] ?? 0
-            const m1 = cfg.m1
-            const m2 = state.grade === 'graduate' || state.grade === 'technician' ? 3 : 4
-            const atRisk = v <= m1
-            const mark = v >= m2 ? 'M2' : v >= m1 ? 'M1' : 'Below'
-            return (
-              <div className={`self-path-row${atRisk ? ' at-risk' : ''}`} key={p}>
-                <div className="self-path-label">
-                  <strong>{PATH_LABELS[p]}</strong>
-                  <span>
-                    {v} · {mark}
-                    {atRisk ? ', at risk' : ''}
-                  </span>
-                </div>
-                <div className="self-path-track">
-                  <div className="self-path-fill" style={{ width: `${Math.min(100, (v / (m2 + 2)) * 100)}%` }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="self-main">
-          <div>
-            <h3 className="self-section">Proficiency against your grade</h3>
-            <p className="self-sub">
-              Big number = level. exp = this grade. ▲ = next grade. Hatched = hidden until feedback.
-              Impact band columns get full project yield.
+      <div className="desk-grid">
+        <div className="stack">
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Promotion paths
             </p>
+            <PathBars
+              paths={state.paths}
+              grade={state.grade}
+              reviewsDone={state.reviewsDone}
+              monthInCycle={cycleMonth}
+            />
+          </div>
+
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Proficiency against your grade
+            </p>
+            <h3 className="h2" style={{ fontSize: '1.25rem' }}>
+              Skills × project stages
+            </h3>
+            <details className="score-recipe">
+              <summary>How this grid is derived</summary>
+              <p>
+                Each cell is a skill at a project stage. Desk actions tagged to a skill add{' '}
+                <strong>evidence</strong> only at your live project’s current stage. Level rises
+                from evidence thresholds; soft skills stay hatched until feedback confirms them.
+              </p>
+              <p>
+                <strong>Big number</strong> = current level (0–5). <strong>exp</strong> = expected
+                for <em>this</em> grade. <strong>▲</strong> = expected for the <em>next</em> grade.{' '}
+                <strong>gap</strong> = below this grade’s expectation. Impact-band columns (your
+                grade’s high-influence stages) earn full project yield; elsewhere you mostly learn.
+              </p>
+            </details>
             <div className="self-grid-wrap">
               <table className="self-grid">
                 <thead>
@@ -179,7 +205,7 @@ export function SelfScreen({
                           <td
                             key={stage}
                             className={`${gap ? 'gap' : ''} ${ahead ? 'ahead' : ''}`}
-                            style={{ background: color, color: light ? '#fff' : '#111' }}
+                            style={{ background: color, color: light ? '#fff' : 'var(--ink)' }}
                             title={`Evidence ${cell.evidence}${cell.confirmed ? ' · confirmed' : ''}`}
                           >
                             <div className="cell-big">{cell.level}</div>
@@ -196,27 +222,44 @@ export function SelfScreen({
                 </tbody>
               </table>
             </div>
+          </div>
 
-            <h3 className="self-section" style={{ marginTop: '1.25rem' }}>
-              Chartership evidence · {BODY_LABELS[state.charterBody]}
-            </h3>
-            <p className="self-sub">
-              17 UK-SPEC elements (A1–E5). Strength: none / mentioned / demonstrated / strong.
-              “I led” → strong; “I contributed” → demonstrated; “we” → mentioned. Body choice only
-              changes grouping.
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Chartership · {BODY_LABELS[state.charterBody]}
             </p>
+            <h3 className="h2" style={{ fontSize: '1.25rem' }}>
+              UK-SPEC evidence (A1–E5)
+            </h3>
+            <details className="score-recipe" open>
+              <summary>How to read this — and what it feeds</summary>
+              <p>
+                Each cell is one competence from UK-SPEC 4th edition. Shade = strength:{' '}
+                <strong>—</strong> none · <strong>men</strong> mentioned · <strong>dem</strong>{' '}
+                demonstrated · <strong>str</strong> strong. Desk CPD / commitment actions and
+                narrative events log episodes; after an event you choose <em>I led</em> /{' '}
+                <em>I contributed</em> / <em>we</em>.
+              </p>
+              <p>
+                <strong>What it factors into:</strong> (1) Commitment path points at Review from
+                those blocks and events; (2) Graduate milestone “Build chartership log”; (3)
+                Professional Review unlock at <em>Engineer+</em> when every element is at least
+                demonstrated — not a Graduate shortcut. CIBSE/IET vs Engineers Ireland only changes
+                grouping; the 17 elements stay the same.
+              </p>
+            </details>
             {onCharterBody && (
               <div className="charter-body-pick">
                 <button
                   type="button"
-                  className={`self-btn${state.charterBody === 'cibse' ? ' solid' : ''}`}
+                  className={`btn ${state.charterBody === 'cibse' ? 'btn-ink' : 'btn-ghost'}`}
                   onClick={() => onCharterBody('cibse')}
                 >
                   CIBSE / IET
                 </button>
                 <button
                   type="button"
-                  className={`self-btn${state.charterBody === 'engineersIreland' ? ' solid' : ''}`}
+                  className={`btn ${state.charterBody === 'engineersIreland' ? 'btn-ink' : 'btn-ghost'}`}
                   onClick={() => onCharterBody('engineersIreland')}
                 >
                   Engineers Ireland
@@ -232,7 +275,11 @@ export function SelfScreen({
                       {g.elements.map((id) => {
                         const s = state.elementStrength[id] ?? 'none'
                         return (
-                          <span key={id} className={`ukspec-cell s-${s}`} title={UK_SPEC_ELEMENTS.find((e) => e.id === id)?.title}>
+                          <span
+                            key={id}
+                            className={`ukspec-cell s-${s}`}
+                            title={UK_SPEC_ELEMENTS.find((e) => e.id === id)?.title}
+                          >
                             {id}
                             <em>{STRENGTH_LABEL[s]}</em>
                           </span>
@@ -251,7 +298,11 @@ export function SelfScreen({
                       {UK_SPEC_ELEMENTS.filter((e) => e.theme === theme).map((e) => {
                         const s = state.elementStrength[e.id] ?? 'none'
                         return (
-                          <span key={e.id} className={`ukspec-cell s-${s}`} title={`${e.title} · ${s}`}>
+                          <span
+                            key={e.id}
+                            className={`ukspec-cell s-${s}`}
+                            title={`${e.title} · ${s}`}
+                          >
                             {e.code}
                             <em>{STRENGTH_LABEL[s]}</em>
                           </span>
@@ -264,8 +315,17 @@ export function SelfScreen({
             )}
             <div className="charter-meta">
               <div>
-                CPD: <strong className="mono">{cpd.total} / {CPD_ANNUAL_TARGET}h</strong> (planned{' '}
-                {cpd.planned} · unplanned {cpd.unplanned})
+                Elements ≥ demonstrated:{' '}
+                <strong className="mono">
+                  {demonstratedCount} / {UK_SPEC_ELEMENTS.length}
+                </strong>
+              </div>
+              <div>
+                CPD:{' '}
+                <strong className="mono">
+                  {cpd.total} / {CPD_ANNUAL_TARGET}h
+                </strong>{' '}
+                (planned {cpd.planned} · unplanned {cpd.unplanned})
               </div>
               <div>
                 Sponsor: <strong>{state.sponsor.name}</strong> · tie {state.sponsor.tieStrength}/3
@@ -273,21 +333,26 @@ export function SelfScreen({
               <div>
                 DAP — short: {state.actionPlan.short}
               </div>
-              <div className="self-sub">
-                Medium: {state.actionPlan.medium} · Long: {state.actionPlan.long}
+              <div className="muted" style={{ fontSize: '0.85rem' }}>
+                Medium: {state.actionPlan.medium}
+              </div>
+              <div className="muted" style={{ fontSize: '0.85rem' }}>
+                Long: {state.actionPlan.long}
               </div>
               {onCharterReview && (
                 <button
                   type="button"
-                  className="self-btn solid"
+                  className="btn btn-ink"
                   disabled={!reviewReady}
                   onClick={onCharterReview}
                 >
                   {state.professionalReview.passed
                     ? 'Professional Review passed'
-                    : reviewReady
-                      ? 'Sit Professional Review'
-                      : 'Professional Review · need all elements ≥ demonstrated'}
+                    : isGradOrTech
+                      ? 'Professional Review · unlocks at Engineer grade'
+                      : reviewReady
+                        ? 'Sit Professional Review'
+                        : `Professional Review · ${demonstratedCount}/17 elements ≥ demonstrated`}
                 </button>
               )}
             </div>
@@ -305,13 +370,17 @@ export function SelfScreen({
                 </ul>
               </details>
             )}
+          </div>
 
-            <h3 className="self-section" style={{ marginTop: '1.25rem' }}>
+          <div className="panel" style={{ padding: '1.1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
               {grade.name} milestones
-            </h3>
+            </p>
             <ul className="self-milestones">
               {specs.map((m) => {
-                const progress = state.milestoneProgress[m.id] ?? (state.milestonesHit.includes(m.id) ? m.target : 0)
+                const progress =
+                  state.milestoneProgress[m.id] ??
+                  (state.milestonesHit.includes(m.id) ? m.target : 0)
                 const done = state.milestonesHit.includes(m.id)
                 const pct = Math.min(100, (progress / m.target) * 100)
                 return (
@@ -321,7 +390,8 @@ export function SelfScreen({
                         {done ? '✓' : '○'} {m.label}
                       </span>
                       <span className="mono">
-                        {Math.min(progress, m.target)} / {m.target} · {PATH_LABELS[m.path]} +1
+                        {Math.min(progress, m.target)} / {m.target} · {PATH_LABELS[m.path]} +1 at
+                        Review
                       </span>
                     </div>
                     <div className="ms-track">
@@ -331,77 +401,84 @@ export function SelfScreen({
                 )
               })}
             </ul>
-            <p className="self-sub">3 of {specs.length} lets you request early promotion.</p>
+            <p className="muted">
+              3 of {specs.length} is only one early-promotion requirement — also need month{' '}
+              {ready.minMonths}+, a passed gate, and Growth ≥ ~40% of target. Base grade timer is{' '}
+              {timer ?? 'open'} months.
+            </p>
+          </div>
+        </div>
+
+        <aside className="stack">
+          <div className="panel" style={{ padding: '1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Top gaps
+            </p>
+            {gaps.length === 0 && (
+              <p className="muted">No visible gaps yet — reveal soft skills or keep practising.</p>
+            )}
+            {gaps.map((g) => (
+              <div className="gap-item" key={`${g.skill}-${g.stage}`}>
+                <strong>
+                  {SKILL_LABELS[g.skill]} at {STAGE_LABELS[g.stage]}: {g.level}, need {g.expected}
+                </strong>
+                <div className="muted" style={{ fontSize: '0.85rem' }}>
+                  Do: {g.actionHint}
+                  {g.cardHint ? `. Slot: ${g.cardHint}.` : '.'} Supports {PATH_LABELS[g.path]}.
+                </div>
+              </div>
+            ))}
+            {onPlanGaps && (
+              <button className="btn btn-ink" type="button" onClick={onPlanGaps}>
+                Plan next month around these
+              </button>
+            )}
           </div>
 
-          <aside className="self-side">
-            <div className="self-card">
-              <h4>Your top 3 gaps</h4>
-              {gaps.length === 0 && <p className="self-sub">No visible gaps yet — reveal soft skills or keep practising.</p>}
-              {gaps.map((g) => (
-                <div className="gap-item" key={`${g.skill}-${g.stage}`}>
-                  <strong>
-                    {SKILL_LABELS[g.skill]} at {STAGE_LABELS[g.stage]}: {g.level}, need {g.expected}
-                  </strong>
-                  <div className="self-sub">
-                    Do: {g.actionHint}
-                    {g.cardHint ? `. Slot: ${g.cardHint}.` : '.'} Lifts {PATH_LABELS[g.path]}
-                    {g.path ===
-                    (Object.entries(state.paths).sort((a, b) => a[1] - b[1])[0]?.[0] as string)
-                      ? ', your weakest path'
-                      : ''}
-                    .
-                  </div>
-                </div>
+          <div className="panel" style={{ padding: '1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Feedback
+            </p>
+            <p className="muted">{hiddenCount} cells still hidden.</p>
+            <button
+              className="btn btn-ink"
+              type="button"
+              disabled={!onAskFeedback || state.resources.hours < 8 || hiddenCount === 0}
+              onClick={onAskFeedback}
+            >
+              Ask for feedback · −8h · reveals 1 cell
+            </button>
+            <ul className="fb-log">
+              {state.feedbackLog.slice(0, 5).map((f, i) => (
+                <li key={`${f.turn}-${i}`}>
+                  <span className="mono">M{f.turn}</span> {f.text}
+                </li>
               ))}
-              {onPlanGaps && (
-                <button className="self-btn solid" type="button" onClick={onPlanGaps}>
-                  Plan next month around these
-                </button>
-              )}
-            </div>
+              {!state.feedbackLog.length && <li className="muted">No feedback yet.</li>}
+            </ul>
+          </div>
 
-            <div className="self-card">
-              <h4>Feedback</h4>
-              <p className="self-sub">{hiddenCount} cells still hidden.</p>
-              <button
-                className="self-btn solid"
-                type="button"
-                disabled={!onAskFeedback || state.resources.hours < 8 || hiddenCount === 0}
-                onClick={onAskFeedback}
-              >
-                Ask for feedback · −8h · reveals 1 cell
-              </button>
-              <ul className="fb-log">
-                {state.feedbackLog.slice(0, 5).map((f, i) => (
-                  <li key={`${f.turn}-${i}`}>
-                    <span className="mono">M{f.turn}</span> {f.text}
-                  </li>
-                ))}
-                {!state.feedbackLog.length && <li className="self-sub">No feedback yet.</li>}
-              </ul>
-            </div>
-
-            <div className="self-card">
-              <h4>Character</h4>
-              <p>
-                <strong>Strength:</strong> {character?.strength}
+          <div className="panel" style={{ padding: '1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Character
+            </p>
+            <p>
+              <strong>Strength:</strong> {character?.strength}
+            </p>
+            <p>
+              <strong>Blind spot:</strong>{' '}
+              {state.feedbackLog.some((f) => f.text.toLowerCase().includes('blind')) ||
+              state.grid.filter((c) => c.revealed && c.skill !== 'technical').length >= 2
+                ? character?.blindSpot
+                : 'Hidden until feedback from a 1:1 or appraisal.'}
+            </p>
+            {nextGrade && (
+              <p className="muted">
+                Next grade, {nextGrade.name}: {nextGrade.theme}
               </p>
-              <p>
-                <strong>Blind spot:</strong>{' '}
-                {state.feedbackLog.some((f) => f.text.toLowerCase().includes('blind')) ||
-                state.grid.filter((c) => c.revealed && c.skill !== 'technical').length >= 2
-                  ? character?.blindSpot
-                  : 'Hidden until feedback from a 1:1 or appraisal.'}
-              </p>
-              {nextGrade && (
-                <p className="self-sub">
-                  Next grade, {nextGrade.name}: {nextGrade.theme}
-                </p>
-              )}
-            </div>
-          </aside>
-        </div>
+            )}
+          </div>
+        </aside>
       </div>
     </section>
   )

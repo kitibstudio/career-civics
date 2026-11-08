@@ -82,19 +82,8 @@ export function logEvidence(
     note: opts.note,
   })
   state.charterLog = state.charterLog.slice(0, 60)
-
-  // Milestone: open log once 5 entries exist
-  if (
-    state.charterLog.length >= 5 &&
-    !state.milestonesHit.includes('charterLog') &&
-    (state.grade === 'graduate' || state.grade === 'technician')
-  ) {
-    state.milestonesHit.push('charterLog')
-    state.milestoneProgress.charterLog = Math.max(
-      state.milestoneProgress.charterLog ?? 0,
-      5,
-    )
-  }
+  // Graduate charterLog milestone advances only via desk CPD/commitment blocks
+  // (see milestones.ts) — evidence entries alone no longer auto-complete it.
 }
 
 export function applyActionChartership(state: GameState, action: ActionDef): void {

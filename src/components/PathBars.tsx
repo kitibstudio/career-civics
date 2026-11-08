@@ -7,17 +7,32 @@ export function PathBars({
   paths,
   grade,
   compact,
+  reviewsDone = 0,
+  monthInCycle = 1,
 }: {
   paths: PathScores
   grade: GradeId
   compact?: boolean
+  /** Reviews completed this career — 0 means scores have never landed. */
+  reviewsDone?: number
+  /** 1–6 within the current six-month cycle. */
+  monthInCycle?: number
 }) {
   const cfg = gateConfig(grade)
   const max = cfg.golden + 2
   const pct = (n: number) => `${Math.min(100, (n / max) * 100)}%`
+  const preReview = reviewsDone === 0
+  const monthsToReview = Math.max(0, 6 - monthInCycle + 1)
 
   return (
     <div className="path-bars">
+      {preReview && (
+        <p className="path-pre-review">
+          Awaiting first Review (in {monthsToReview} month{monthsToReview === 1 ? '' : 's'}). Path
+          totals stay at 0 until then — <strong>Below gate</strong> here just means “not scored
+          yet,” not that you are failing.
+        </p>
+      )}
       <details className="gate-glossary">
         <summary>
           What good looks like · M1 ≥{cfg.m1} · M2 ≥{cfg.m2} (≥{cfg.gateStrong}) · Golden ≥
@@ -33,11 +48,26 @@ export function PathBars({
       </details>
 
       {PATHS.map((p) => {
-        const v = paths[p]
-        const mark =
-          v >= cfg.golden ? 'Golden' : v >= cfg.m2 ? 'M2' : v >= cfg.m1 ? 'M1' : 'Below gate'
-        const tone =
-          v >= cfg.golden ? 'golden' : v >= cfg.m2 ? 'm2' : v >= cfg.m1 ? 'm1' : 'below'
+        const v = paths[p] ?? 0
+        const awaiting = preReview && v === 0
+        const mark = awaiting
+          ? 'Awaiting Review'
+          : v >= cfg.golden
+            ? 'Golden'
+            : v >= cfg.m2
+              ? 'M2'
+              : v >= cfg.m1
+                ? 'M1'
+                : 'Below gate'
+        const tone = awaiting
+          ? 'await'
+          : v >= cfg.golden
+            ? 'golden'
+            : v >= cfg.m2
+              ? 'm2'
+              : v >= cfg.m1
+                ? 'm1'
+                : 'below'
         return (
           <div className="path-row" key={p}>
             <div>
@@ -45,7 +75,9 @@ export function PathBars({
               <div className={`path-mark ${tone}`}>{mark}</div>
               {!compact && (
                 <div className="muted" style={{ fontSize: '0.75rem' }}>
-                  Target M1 {cfg.m1} · M2 {cfg.m2} · Golden {cfg.golden}
+                  {awaiting
+                    ? 'Desk actions this cycle become evidence; points land at Review'
+                    : `Target M1 ${cfg.m1} · M2 ${cfg.m2} · Golden ${cfg.golden}`}
                 </div>
               )}
             </div>

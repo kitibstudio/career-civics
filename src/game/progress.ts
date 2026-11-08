@@ -265,6 +265,7 @@ export function promotionReady(state: GameState): {
   reason: string
   earlyOk: boolean
   earlyMissing: string
+  minMonths: number
 } {
   const gate = state.consecutiveGate
   const growthNeed = growthNeedFor(state.grade)
@@ -274,18 +275,40 @@ export function promotionReady(state: GameState): {
   const gateOk = gate >= 2
   const ready = gateOk && growthOk && !crisis
 
+  // Early promotion is rare: ≥12 months, 3 milestones, one passed gate, and Growth underway.
+  // Graduate base timer is ~30 months — month 4 should never look “almost there.”
+  const minMonths =
+    state.grade === 'graduate' || state.grade === 'technician'
+      ? 12
+      : state.grade === 'engineer' || state.grade === 'seniorTechnician'
+        ? 18
+        : 24
+  const growthFloor = Math.ceil(growthNeed * 0.4)
+
   let reason = ''
   if (ready) reason = 'Gate met twice, Growth banked, no Crisis.'
-  else if (gate < 2)
+  else if (state.reviewsDone === 0) {
+    reason = `First Review is at month 6 — path totals stay 0 until then (month ${state.monthInGrade} of the grade). Early promotion needs month ${minMonths}+ plus milestones and a passed gate.`
+  } else if (gate < 2)
     reason = `Gate met at ${gate} of 2 reviews in a row.${weakestFloorNote(state)}`
   else if (!growthOk) reason = `Growth banked ${Math.round(state.growthBanked)} / ${growthNeed}.`
   else if (crisis) reason = 'Clear the Crisis before requesting promotion.'
 
-  const earlyOk = hits >= 3 && gate >= 1
-  const earlyMissing =
-    hits < 3 ? `needs ${3 - hits} more milestone(s)` : gate < 1 ? 'needs gate at latest review' : ''
+  const earlyOk =
+    hits >= 3 &&
+    gate >= 1 &&
+    state.monthInGrade >= minMonths &&
+    state.growthBanked >= growthFloor &&
+    !crisis
+  let earlyMissing = ''
+  if (hits < 3) earlyMissing = `needs ${3 - hits} more milestone(s)`
+  else if (state.monthInGrade < minMonths)
+    earlyMissing = `needs month ${minMonths}+ in grade (now ${state.monthInGrade})`
+  else if (gate < 1) earlyMissing = 'needs a passed gate at Review'
+  else if (state.growthBanked < growthFloor) earlyMissing = `needs Growth ≥ ${growthFloor}`
+  else if (crisis) earlyMissing = 'clear Crisis first'
 
-  return { ready, reason, earlyOk, earlyMissing }
+  return { ready, reason, earlyOk, earlyMissing, minMonths }
 }
 
 export function growthNeedFor(grade: GradeId): number {

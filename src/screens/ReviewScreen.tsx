@@ -73,7 +73,12 @@ export function ReviewScreen({
 
           <div>
             <h3 style={{ fontFamily: 'var(--font-display)' }}>Paths after this Turn</h3>
-            <PathBars paths={review.pathTotals} grade={state.grade} />
+            <PathBars
+              paths={review.pathTotals}
+              grade={state.grade}
+              reviewsDone={state.reviewsDone}
+              monthInCycle={6}
+            />
             <div style={{ marginTop: '1rem', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
               <div>Growth this Turn: +{review.growthGained}</div>
               <div>Growth banked: {state.growthBanked} / {cfg.growthNeed}</div>

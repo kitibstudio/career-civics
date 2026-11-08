@@ -28,6 +28,7 @@ import {
   enforceRoleModelCap,
   gainGridEvidence,
   monthInCycle,
+  promotionReady,
   rateCard,
   revealPriorityCell,
 } from './progress'
@@ -228,6 +229,7 @@ export function createNewGame(
       notes: [],
     },
     pendingClaim: null,
+    pendingCommitment: 0,
   }
 
   refreshInbox(state)
@@ -778,15 +780,16 @@ export function beginReview(state: GameState): GameState {
     delta.collaboration += Math.min(2, lineage)
   }
 
-  // Commitment path from desk evidence (E1–E5 actions)
-  const commitDelta = commitmentPathDeltaFromActions(actionCounts)
+  // Commitment path from desk evidence + banked event choices (applied only at Review)
+  const commitDelta =
+    commitmentPathDeltaFromActions(actionCounts) + (next.pendingCommitment ?? 0)
   if (commitDelta) {
     delta.commitment += commitDelta
-    notes.push(`Commitment evidence from desk: +${commitDelta}`)
+    notes.push(
+      `Commitment: +${commitDelta} (desk blocks${next.pendingCommitment ? ` + event bank ${next.pendingCommitment}` : ''})`,
+    )
   }
-  if (pathCarded.commitment > 0) {
-    /* card already scored into commitment */
-  }
+  next.pendingCommitment = 0
 
   // neglect
   const crisesDrawn: string[] = []
@@ -997,9 +1000,9 @@ export function finishReview(state: GameState): GameState {
     return next
   }
 
-  // early promotion via milestones: 3 of 5
-  const hits = GRADES[next.grade].milestones.filter((m) => next.milestonesHit.includes(m.id)).length
-  if (hits >= 3 && next.consecutiveGate >= 1 && next.crises.length === 0 && next.reviewsDone >= 2) {
+  // Early promotion: same bar as Self (months + milestones + gate + growth floor)
+  const early = promotionReady(next)
+  if (early.earlyOk) {
     next.screen = 'promotion'
     pushLog(next, 'Milestone route: early promotion review.', 'good')
     return next
@@ -1143,7 +1146,8 @@ function applyEventChoice(
   const burnout = next.burnoutTurns > 0
   for (const [k, v] of Object.entries(choice.effects)) {
     if (k === 'hours') next.resources.hours = Math.max(0, next.resources.hours + (v as number))
-    else if (k === 'commitmentPath') next.paths.commitment += v as number
+    else if (k === 'commitmentPath')
+      next.pendingCommitment = (next.pendingCommitment ?? 0) + (v as number)
     else if (k in next.resources)
       applyResource(next.resources, k as keyof Resources, v as number, burnout)
   }
@@ -1266,6 +1270,7 @@ export function loadGame(): GameState | null {
       }
     }
     if (state.pendingClaim === undefined) state.pendingClaim = null
+    if (state.pendingCommitment == null) state.pendingCommitment = 0
     ensureChartership(state)
     for (const cell of state.grid ?? []) {
       if (cell.evidence == null) cell.evidence = cell.level >= 1 ? 2 : 0
@@ -1327,6 +1332,7 @@ export {
   topGaps,
   promotionReady,
   growthNeedFor,
+  monthInCycle,
 } from './progress'
 export { milestonesFor } from '../data/milestones'
 export { expectedLevel, nextGradeId } from '../data/expectations'

@@ -27,7 +27,13 @@ export function PathExplain({ state }: { state: GameState }) {
       <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
         Promotion paths
       </p>
-      <PathBars paths={state.paths} grade={state.grade} compact />
+      <PathBars
+        paths={state.paths}
+        grade={state.grade}
+        compact
+        reviewsDone={state.reviewsDone}
+        monthInCycle={monthsIntoCycle}
+      />
 
       <div className="path-explain-body">
         <details className="score-recipe">

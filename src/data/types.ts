@@ -370,4 +370,6 @@ export interface GameState {
   professionalReview: ProfessionalReviewState
   /** Pending claim step after an event choice (I / contributed / we). */
   pendingClaim: null | { eventId: string; choiceId: string }
+  /** Commitment path points from events — applied at Review, not mid-month. */
+  pendingCommitment: number
 }

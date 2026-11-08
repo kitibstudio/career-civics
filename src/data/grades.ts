@@ -56,7 +56,7 @@ export const GRADES: Record<string, GradeDef> = {
       { id: 'designReview', label: 'Pass a design review', path: 'delivery' },
       { id: 'siteVisits', label: 'Log 20 site visits', path: 'collaboration' },
       { id: 'drawingSet', label: 'Complete a full drawing set', path: 'delivery' },
-      { id: 'charterLog', label: 'Open chartership log (5+ entries)', path: 'commitment' },
+      { id: 'charterLog', label: 'Build chartership log (12 blocks)', path: 'commitment' },
     ],
     crisis: {
       id: 'designFreeze',
