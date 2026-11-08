@@ -7,8 +7,21 @@ import {
   startingSpecialism,
 } from '../data/cards'
 import { CHARACTERS } from '../data/characters'
-import { GRADES, STAGE_ORDER, gateConfig } from '../data/grades'
+import { GRADES, PATH_ORDER, STAGE_ORDER, gateConfig } from '../data/grades'
 import { INBOX_POOL, inboxForGrade } from '../data/inbox'
+import {
+  defaultActionPlan,
+  defaultSponsor,
+  emptyEvidenceMap,
+} from '../data/ukSpec'
+import {
+  applyActionChartership,
+  canAttemptProfessionalReview,
+  commitmentPathDeltaFromActions,
+  ensureChartership,
+  logEvidence,
+  runProfessionalReview,
+} from './chartership'
 import {
   applyMilestoneProgress,
   defaultTies,
@@ -21,6 +34,7 @@ import {
 import type {
   ActionDef,
   CardDef,
+  ClaimRole,
   GameState,
   GradeId,
   GridCell,
@@ -33,8 +47,8 @@ import type {
   StageId,
 } from '../data/types'
 
-const PATHS: PathId[] = ['delivery', 'technical', 'collaboration', 'leadership']
-const STORAGE_KEY = 'career-civics-save-v2'
+const PATHS: PathId[] = [...PATH_ORDER]
+const STORAGE_KEY = 'career-civics-save-v3'
 
 const RATING_MULT: Record<Rating, number> = {
   notShown: 0,
@@ -44,7 +58,13 @@ const RATING_MULT: Record<Rating, number> = {
 }
 
 function emptyPaths(): PathScores {
-  return { delivery: 0, technical: 0, collaboration: 0, leadership: 0 }
+  return { delivery: 0, technical: 0, collaboration: 0, leadership: 0, commitment: 0 }
+}
+
+function commitmentRequired(grade: GradeId): boolean {
+  return ['engineer', 'senior', 'associate', 'seniorTechnician', 'bimLead', 'leadCoordinator'].includes(
+    grade,
+  )
 }
 
 function clone<T>(v: T): T {
@@ -124,7 +144,10 @@ function demoProjects(grade: GradeId): GameState['projects'] {
   ]
 }
 
-export function createNewGame(characterId: string): GameState {
+export function createNewGame(
+  characterId: string,
+  opts?: { charterBody?: GameState['charterBody'] },
+): GameState {
   const character = CHARACTERS.find((c) => c.id === characterId) ?? CHARACTERS[0]
   const grade: GradeId = character.track === 'technician' ? 'technician' : 'graduate'
   const spec = startingSpecialism(character.discipline)
@@ -192,12 +215,25 @@ export function createNewGame(characterId: string): GameState {
     burnoutTurns: 0,
     justPromoted: false,
     wellbeingFloor: 4,
+    charterBody: opts?.charterBody ?? 'cibse',
+    sponsor: defaultSponsor(character.discipline),
+    actionPlan: defaultActionPlan(grade),
+    elementStrength: emptyEvidenceMap(),
+    charterLog: [],
+    cpd: { plannedHours: 0, unplannedHours: 0, yearStartTurn: 1 },
+    professionalReview: {
+      attempted: false,
+      passed: false,
+      deferredElements: [],
+      notes: [],
+    },
+    pendingClaim: null,
   }
 
   refreshInbox(state)
   pushLog(
     state,
-    `Welcome, ${character.name}. Second Pair of Eyes is always on. Slot Habits and Specialisms, then spend your hours.`,
+    `Welcome, ${character.name}. Second Pair of Eyes is always on. Commitment path (E) is open — pick a sponsor (${state.sponsor.name}) and log evidence against UK-SPEC.`,
     'good',
   )
   return state
@@ -341,6 +377,8 @@ export function actionYieldPreview(
   const tags = new Set(action.tags)
   if (tags.has('delivery') || tags.has('tender') || tags.has('commercial')) pathLean.push('delivery')
   if (tags.has('technical') || tags.has('detailed') || tags.has('software')) pathLean.push('technical')
+  if (tags.has('commitment') || tags.has('safety') || tags.has('ethics') || tags.has('sustainability') || tags.has('charter'))
+    pathLean.push('commitment')
   if (tags.has('collaboration') || tags.has('coordination') || tags.has('network')) {
     pathLean.push('collaboration')
   }
@@ -417,6 +455,15 @@ export function pathActionEvidence(state: GameState): Record<PathId, { label: st
       { label: 'Support Down', count: n('mentor-junior') },
       { label: 'CPD', count: n('cpd-friday') },
     ].filter((x) => x.count > 0),
+    commitment: [
+      { label: 'Risk review', count: n('risk-review') },
+      { label: 'Carbon option', count: n('carbon-option') },
+      { label: 'Ethics / conduct', count: n('conduct-dilemma') },
+      { label: 'Requirements', count: n('requirements-brief') },
+      { label: 'Evaluate built', count: n('evaluate-built') },
+      { label: 'Chartership log', count: n('chartership-log') },
+      { label: 'CPD', count: n('cpd-friday') },
+    ].filter((x) => x.count > 0),
   }
 }
 
@@ -463,6 +510,7 @@ export function performAction(state: GameState, actionId: string): GameState {
   }
 
   applyMilestoneProgress(next, actionId)
+  applyActionChartership(next, action)
 
   if (action.id === 'learn-revit') next.software.revit = true
   if (effects.revealFeedback) revealFeedback(next)
@@ -730,6 +778,16 @@ export function beginReview(state: GameState): GameState {
     delta.collaboration += Math.min(2, lineage)
   }
 
+  // Commitment path from desk evidence (E1–E5 actions)
+  const commitDelta = commitmentPathDeltaFromActions(actionCounts)
+  if (commitDelta) {
+    delta.commitment += commitDelta
+    notes.push(`Commitment evidence from desk: +${commitDelta}`)
+  }
+  if (pathCarded.commitment > 0) {
+    /* card already scored into commitment */
+  }
+
   // neglect
   const crisesDrawn: string[] = []
   const neglectThreshold = next.grade === 'graduate' || next.grade === 'technician' ? 3 : 2
@@ -738,10 +796,18 @@ export function beginReview(state: GameState): GameState {
       next.neglect[p] = 0
       continue
     }
-    if (pathCarded[p] === 0) next.neglect[p] += 1
+    // Graduate/Technician: commitment neglect is softer (threshold +1)
+    const thresh =
+      p === 'commitment' && (next.grade === 'graduate' || next.grade === 'technician')
+        ? neglectThreshold + 1
+        : neglectThreshold
+    const fed =
+      pathCarded[p] > 0 ||
+      (p === 'commitment' && commitDelta > 0)
+    if (!fed) next.neglect[p] += 1
     else next.neglect[p] = 0
 
-    if (next.neglect[p] >= neglectThreshold) {
+    if (next.neglect[p] >= thresh) {
       const crisisId = crisisForPath(next.grade, p)
       if (crisisId === 'drift') {
         delta[p] -= 2
@@ -755,6 +821,12 @@ export function beginReview(state: GameState): GameState {
       }
     }
   }
+
+  // DAP revisit note
+  next.actionPlan.lastReviewedTurn = next.turn
+  notes.push(
+    `Development Action Plan revisited: short “${next.actionPlan.short.slice(0, 48)}…”`,
+  )
 
   // morale check
   let moralePenalty = false
@@ -799,7 +871,7 @@ export function beginReview(state: GameState): GameState {
   next.resources.growth += growthGain
   next.growthBanked = next.resources.growth
 
-  const gatePass = checkGate(next.paths, cfg, next.specialistWaive)
+  const gatePass = checkGate(next.paths, cfg, next.specialistWaive, next.grade)
   if (gatePass) next.consecutiveGate += 1
   else next.consecutiveGate = 0
 
@@ -825,14 +897,15 @@ export function beginReview(state: GameState): GameState {
 }
 
 function crisisForPath(grade: GradeId, path: PathId): string {
+  if (path === 'commitment') return 'corner-cut'
   const table: Record<string, Partial<Record<PathId, string>>> = {
-    graduate: { collaboration: 'island-mentality', leadership: 'silent-struggle' },
-    engineer: { delivery: 'late-alarm', technical: 'my-way-only' },
-    senior: { delivery: 'isolated-verdict', leadership: 'problem-spotter' },
-    associate: { delivery: 'unclaimed-helm', leadership: 'command-without-trust' },
-    technician: { collaboration: 'guesswork-geometry' },
-    seniorTechnician: { delivery: 'revision-drift' },
-    bimLead: { leadership: 'standards-for-their-own-sake' },
+    graduate: { collaboration: 'island-mentality', leadership: 'silent-struggle', commitment: 'corner-cut' },
+    engineer: { delivery: 'late-alarm', technical: 'my-way-only', commitment: 'corner-cut' },
+    senior: { delivery: 'isolated-verdict', leadership: 'problem-spotter', commitment: 'corner-cut' },
+    associate: { delivery: 'unclaimed-helm', leadership: 'command-without-trust', commitment: 'corner-cut' },
+    technician: { collaboration: 'guesswork-geometry', commitment: 'corner-cut' },
+    seniorTechnician: { delivery: 'revision-drift', commitment: 'corner-cut' },
+    bimLead: { leadership: 'standards-for-their-own-sake', commitment: 'corner-cut' },
   }
   return table[grade]?.[path] ?? 'drift'
 }
@@ -841,10 +914,13 @@ function checkGate(
   paths: PathScores,
   cfg: ReturnType<typeof gateConfig>,
   waive: PathId | null,
+  grade: GradeId,
 ): boolean {
   let strong = 0
   for (const p of PATHS) {
     if (waive === p) continue
+    // Commitment at M1 required from Engineer grade onward (grades.md)
+    if (p === 'commitment' && !commitmentRequired(grade)) continue
     if (paths[p] < cfg.m1) return false
     if (paths[p] >= cfg.m2) strong += 1
   }
@@ -946,6 +1022,8 @@ export function promote(state: GameState, keepHabitId?: string): GameState {
       leadership: 'You lead a multi-discipline wonder. Practice leadership beckons.',
       delivery: 'Client account growth puts commercial leadership in reach.',
       collaboration: 'Your talks and networks start shaping guidance beyond the firm.',
+      commitment:
+        'Chartered practice — you mentor others through Professional Review and feed the Influence legacy.',
     }
     // map collaboration→Influence legacy, delivery→Commercial
     next.ended = {
@@ -1025,18 +1103,121 @@ export function resolveEventChoice(state: GameState, choiceId: string): GameStat
   if (!ev) {
     next.screen = 'desk'
     next.pendingEvent = null
+    next.pendingClaim = null
+    return next
+  }
+  // If event has UK-SPEC elements, pause for "I / contributed / we" claim
+  if (ev.elements?.length) {
+    next.pendingClaim = { eventId: ev.id, choiceId }
+    next.screen = 'event'
+    return next
+  }
+  return applyEventChoice(next, ev.id, choiceId, 'contributed')
+}
+
+export function resolveEventClaim(state: GameState, claim: ClaimRole): GameState {
+  const next = clone(state)
+  if (!next.pendingClaim) {
+    next.screen = 'desk'
+    return next
+  }
+  const { eventId, choiceId } = next.pendingClaim
+  return applyEventChoice(next, eventId, choiceId, claim)
+}
+
+function applyEventChoice(
+  state: GameState,
+  eventId: string,
+  choiceId: string,
+  claim: ClaimRole,
+): GameState {
+  const next = state
+  const ev = EVENTS.find((e) => e.id === eventId)
+  if (!ev) {
+    next.screen = 'desk'
+    next.pendingEvent = null
+    next.pendingClaim = null
     return next
   }
   const choice = ev.choices.find((c) => c.id === choiceId) ?? ev.choices[0]
   const burnout = next.burnoutTurns > 0
   for (const [k, v] of Object.entries(choice.effects)) {
     if (k === 'hours') next.resources.hours = Math.max(0, next.resources.hours + (v as number))
+    else if (k === 'commitmentPath') next.paths.commitment += v as number
     else if (k in next.resources)
       applyResource(next.resources, k as keyof Resources, v as number, burnout)
   }
+  if (choice.drawsCornerCut && !next.crises.includes('corner-cut')) {
+    next.crises.push('corner-cut')
+    pushLog(next, 'Corner Cut Crisis: professional commitment neglected.', 'bad')
+  }
+  if (ev.elements?.length) {
+    const effectiveClaim = choice.drawsCornerCut ? 'we' : claim
+    logEvidence(next, {
+      source: 'event',
+      title: ev.title,
+      elements: ev.elements,
+      claim: effectiveClaim,
+      note: choice.result,
+    })
+    // Unplanned CPD flavour for ethics/safety learning moments
+    if (ev.elements.some((e) => e.startsWith('E')) && effectiveClaim !== 'we') {
+      next.cpd.unplannedHours += 2
+    }
+  }
   pushLog(next, `Event: ${ev.title} — ${choice.result}`, 'neutral')
   next.pendingEvent = null
+  next.pendingClaim = null
   next.screen = 'desk'
+  return next
+}
+
+export function setCharterBody(
+  state: GameState,
+  body: GameState['charterBody'],
+): GameState {
+  const next = clone(state)
+  next.charterBody = body
+  pushLog(
+    next,
+    `Chartership body: ${body === 'engineersIreland' ? 'Engineers Ireland' : 'CIBSE / IET (UK-SPEC)'}.`,
+    'good',
+  )
+  return next
+}
+
+export function updateActionPlan(
+  state: GameState,
+  plan: Partial<GameState['actionPlan']>,
+): GameState {
+  const next = clone(state)
+  next.actionPlan = { ...next.actionPlan, ...plan, lastReviewedTurn: next.turn }
+  return next
+}
+
+export function attemptCharterReview(state: GameState): GameState {
+  const next = clone(state)
+  if (!canAttemptProfessionalReview(next)) {
+    pushLog(
+      next,
+      'Professional Review locked: every UK-SPEC element needs at least “demonstrated” evidence.',
+      'warn',
+    )
+    return next
+  }
+  const result = runProfessionalReview(next)
+  next.screen = 'charterReview'
+  pushLog(
+    next,
+    result.passed ? 'Professional Review: pass.' : 'Professional Review: deferred.',
+    result.passed ? 'good' : 'warn',
+  )
+  return next
+}
+
+export function finishCharterReview(state: GameState): GameState {
+  const next = clone(state)
+  next.screen = 'self'
   return next
 }
 
@@ -1055,7 +1236,8 @@ export function saveGame(state: GameState) {
 
 export function loadGame(): GameState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw =
+      localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('career-civics-save-v2')
     if (!raw) return null
     const state = JSON.parse(raw) as GameState
     if (!state.monthStartResources) state.monthStartResources = clone(state.resources)
@@ -1067,6 +1249,24 @@ export function loadGame(): GameState | null {
     if (!state.feedbackLog) state.feedbackLog = []
     if (state.positiveFeedbackThisReview == null) state.positiveFeedbackThisReview = false
     if (!state.wellbeingFloor) state.wellbeingFloor = 4
+    if (state.paths && state.paths.commitment == null) state.paths.commitment = 0
+    if (state.neglect && state.neglect.commitment == null) state.neglect.commitment = 0
+    if (!state.charterBody) state.charterBody = 'cibse'
+    if (!state.sponsor) state.sponsor = defaultSponsor(state.discipline)
+    if (!state.actionPlan) state.actionPlan = defaultActionPlan(state.grade)
+    if (!state.elementStrength) state.elementStrength = emptyEvidenceMap()
+    if (!state.charterLog) state.charterLog = []
+    if (!state.cpd) state.cpd = { plannedHours: 0, unplannedHours: 0, yearStartTurn: 1 }
+    if (!state.professionalReview) {
+      state.professionalReview = {
+        attempted: false,
+        passed: false,
+        deferredElements: [],
+        notes: [],
+      }
+    }
+    if (state.pendingClaim === undefined) state.pendingClaim = null
+    ensureChartership(state)
     for (const cell of state.grid ?? []) {
       if (cell.evidence == null) cell.evidence = cell.level >= 1 ? 2 : 0
       if (cell.confirmed == null) cell.confirmed = cell.revealed && cell.level >= 3
@@ -1130,10 +1330,15 @@ export {
 } from './progress'
 export { milestonesFor } from '../data/milestones'
 export { expectedLevel, nextGradeId } from '../data/expectations'
+export {
+  canAttemptProfessionalReview,
+  cpdProgress,
+} from './chartership'
 
 export function clearSave() {
   try {
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem('career-civics-save-v2')
   } catch {
     /* ignore */
   }

@@ -111,16 +111,32 @@ export function PromotionScreen({
             type="button"
             style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}
             onClick={() => {
-              const blob = new Blob(
-                [
-                  `Career Civics debrief — ${character?.name ?? ''} · ${grade.name}\n`,
-                  `Paths: ${JSON.stringify(state.paths)}\n`,
-                  `Milestones: ${state.milestonesHit.join(', ') || 'none'}\n`,
-                  `Growth banked: ${state.growthBanked}\n`,
-                  `Feedback:\n${state.feedbackLog.map((f) => `M${f.turn}: ${f.text}`).join('\n') || 'none'}\n`,
-                ],
-                { type: 'text/plain' },
-              )
+              const lines = [
+                `Career Civics debrief — ${character?.name ?? ''} · ${grade.name}`,
+                `Charter body: ${state.charterBody}`,
+                `Sponsor: ${state.sponsor.name} (tie ${state.sponsor.tieStrength}/3)`,
+                `Paths: ${JSON.stringify(state.paths)}`,
+                `Milestones: ${state.milestonesHit.join(', ') || 'none'}`,
+                `Growth banked: ${state.growthBanked}`,
+                `CPD: ${state.cpd.plannedHours + state.cpd.unplannedHours}h (planned ${state.cpd.plannedHours} / unplanned ${state.cpd.unplannedHours})`,
+                `DAP short: ${state.actionPlan.short}`,
+                `DAP medium: ${state.actionPlan.medium}`,
+                `DAP long: ${state.actionPlan.long}`,
+                '',
+                'Chartership practice sheet (UK-SPEC A1–E5) — game episodes are practice, never real evidence:',
+                ...Object.entries(state.elementStrength).map(([id, s]) => {
+                  const eps = state.charterLog
+                    .filter((e) => e.elements.includes(id as keyof typeof state.elementStrength))
+                    .slice(0, 3)
+                    .map((e) => `M${e.turn} ${e.title} (${e.claim})`)
+                    .join('; ')
+                  return `${id}: ${s}${eps ? ` — ${eps}` : ''} | Your real equivalent: …`
+                }),
+                '',
+                'Feedback:',
+                ...(state.feedbackLog.map((f) => `M${f.turn}: ${f.text}`) || ['none']),
+              ]
+              const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
               const url = URL.createObjectURL(blob)
               const a = document.createElement('a')
               a.href = url
@@ -129,7 +145,7 @@ export function PromotionScreen({
               URL.revokeObjectURL(url)
             }}
           >
-            Export debrief card
+            Export chartership practice sheet
           </button>
         </div>
       </div>

@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { CHARACTERS } from '../data/characters'
+import type { CharterBody } from '../data/types'
 
 export function CharacterScreen({
   onBack,
   onPick,
 }: {
   onBack: () => void
-  onPick: (id: string) => void
+  onPick: (id: string, charterBody: CharterBody) => void
 }) {
   const [selected, setSelected] = useState(CHARACTERS[0].id)
+  const [charterBody, setCharterBody] = useState<CharterBody>('cibse')
   const character = CHARACTERS.find((c) => c.id === selected)!
 
   return (
@@ -76,8 +78,30 @@ export function CharacterScreen({
                   : 'Graduate → Engineer → Senior → Associate. Pivots (discipline / PM) appear at promotion.'}
               </div>
             </div>
+            <div>
+              <strong>Chartership body</strong>
+              <div className="muted" style={{ fontSize: '0.88rem', marginBottom: '0.4rem' }}>
+                Same 17 UK-SPEC elements; grouping changes for Engineers Ireland.
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className={`btn ${charterBody === 'cibse' ? 'btn-ink' : 'btn-ghost'}`}
+                  onClick={() => setCharterBody('cibse')}
+                >
+                  CIBSE / IET
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${charterBody === 'engineersIreland' ? 'btn-ink' : 'btn-ghost'}`}
+                  onClick={() => setCharterBody('engineersIreland')}
+                >
+                  Engineers Ireland
+                </button>
+              </div>
+            </div>
           </div>
-          <button className="btn btn-ink" onClick={() => onPick(character.id)}>
+          <button className="btn btn-ink" onClick={() => onPick(character.id, charterBody)}>
             Begin career
           </button>
         </div>

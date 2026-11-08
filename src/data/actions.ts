@@ -94,10 +94,13 @@ export const ACTIONS: ActionDef[] = [
   {
     id: 'cpd-friday',
     name: 'CPD session',
-    blurb: 'Diarised learning. Growth never switches off.',
+    blurb:
+      'Eight planned CPD hours toward the 40h/year target (E4). Competence, Growth, Commitment.',
     hours: 8,
-    tags: ['growth', 'cpd'],
+    tags: ['growth', 'cpd', 'commitment'],
     skills: ['technical'],
+    elements: ['E4', 'A1'],
+    cpdHours: 8,
     effects: {
       competence: 1,
       growth: 1,
@@ -192,14 +195,85 @@ export const ACTIONS: ActionDef[] = [
   {
     id: 'chartership-log',
     name: 'Chartership log',
-    blurb: 'Record learning against your chartership / CPD log. Stack blocks to build the record.',
+    blurb:
+      'Record an episode against UK-SPEC (A–E). Stack blocks; each adds planned CPD and Commitment evidence.',
     hours: 8,
-    tags: ['leadership', 'cpd', 'charter'],
+    tags: ['commitment', 'cpd', 'charter'],
     skills: ['technical'],
+    elements: ['E4', 'A1'],
+    cpdHours: 8,
     effects: {
       competence: 1,
       growth: 1,
       skill: 'technical',
+    },
+  },
+  {
+    id: 'risk-review',
+    name: 'Designer’s risk review',
+    blurb: 'Walk the design for safe access, maintenance and construction risk (E2). −8h.',
+    hours: 8,
+    tags: ['commitment', 'safety'],
+    skills: ['technical', 'coordination'],
+    elements: ['E2', 'B2'],
+    effects: {
+      competence: 1,
+      reputation: 1,
+      wellbeing: 1,
+    },
+  },
+  {
+    id: 'carbon-option',
+    name: 'Carbon option study',
+    blurb: 'Whole-life carbon vs capital cost for one plant choice (E3, D2). Present or drop.',
+    hours: 8,
+    tags: ['commitment', 'sustainability'],
+    skills: ['commercial', 'presenting'],
+    elements: ['E3', 'D2', 'B1'],
+    effects: {
+      competence: 1,
+      reputation: 1,
+      network: 1,
+    },
+  },
+  {
+    id: 'conduct-dilemma',
+    name: 'Ethics / conduct hour',
+    blurb: 'Read the code of conduct, declare a conflict, or coach a peer on D&I (E1, E5, D3).',
+    hours: 8,
+    tags: ['commitment', 'ethics'],
+    skills: ['communication'],
+    elements: ['E1', 'E5', 'D3'],
+    effects: {
+      reputation: 1,
+      growth: 1,
+      wellbeing: 1,
+    },
+  },
+  {
+    id: 'requirements-brief',
+    name: 'Capture requirements',
+    blurb: 'Define what success looks like before designing (B1). Briefs beat assumptions.',
+    hours: 8,
+    tags: ['commitment', 'technical'],
+    skills: ['technical', 'communication'],
+    elements: ['B1', 'D1'],
+    effects: {
+      competence: 2,
+      network: 1,
+    },
+  },
+  {
+    id: 'evaluate-built',
+    name: 'Evaluate what was built',
+    blurb: 'Post-handover check: did the design perform? Feed B3 evidence back into standards.',
+    hours: 8,
+    tags: ['commitment', 'technical'],
+    skills: ['technical'],
+    elements: ['B3', 'C4'],
+    effects: {
+      competence: 2,
+      reputation: 1,
     },
   },
   {
@@ -290,6 +364,8 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
     'work-across',
     'cpd-friday',
     'chartership-log',
+    'risk-review',
+    'conduct-dilemma',
     'ask-feedback',
     'unutilized',
     'leave',
@@ -307,6 +383,10 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
     'work-across',
     'cpd-friday',
     'chartership-log',
+    'risk-review',
+    'carbon-option',
+    'conduct-dilemma',
+    'requirements-brief',
     'ask-feedback',
     'client-meeting',
     'unutilized',
@@ -319,9 +399,11 @@ export function actionsFor(track: Track, grade: GradeId): ActionDef[] {
   if (grade === 'engineer' || grade === 'senior' || grade === 'associate') {
     eng.add('mentor-junior')
     eng.add('client-meeting')
+    eng.add('evaluate-built')
   }
   if (grade === 'seniorTechnician' || grade === 'bimLead' || grade === 'leadCoordinator') {
     tech.add('mentor-junior')
+    tech.add('carbon-option')
   }
   const pool = track === 'technician' ? tech : eng
   return ACTIONS.filter((a) => pool.has(a.id))
@@ -429,6 +511,222 @@ export const EVENTS: EventDef[] = [
         label: 'Take the call seriously',
         result: 'You don’t leave yet — but you map a pivot. Options are a resource.',
         effects: { network: 3, growth: 1, wellbeing: 1 },
+      },
+    ],
+  },
+  // Commitment / UK-SPEC gap fillers (grades.md)
+  {
+    id: 'cut-fire-alarm',
+    title: 'Client Asks to Cut the Fire Alarm Below Code',
+    grade: ['graduate', 'engineer', 'senior'],
+    body: 'Value engineering lands on life safety. The PM wants a cheaper panel and fewer devices.',
+    elements: ['E1', 'E5'],
+    choices: [
+      {
+        id: 'refuse',
+        label: 'Refuse and explain the code',
+        result: 'You hold the line. Awkward fee talk; strong E1/E5 evidence.',
+        defaultClaim: 'led',
+        effects: { reputation: 3, competence: 1, commitmentPath: 2, fee: -1 },
+      },
+      {
+        id: 'escalate',
+        label: 'Escalate to your senior / fire engineer',
+        result: 'Ask Up protects the design. You learn how conduct is defended.',
+        defaultClaim: 'contributed',
+        effects: { network: 2, growth: 1, commitmentPath: 1, reputation: 1 },
+      },
+      {
+        id: 'comply',
+        label: 'Comply to save the fee',
+        result: 'Corner Cut. The assessor will never credit this episode.',
+        drawsCornerCut: true,
+        defaultClaim: 'we',
+        effects: { fee: 2, reputation: -3, wellbeing: -2, commitmentPath: -2 },
+      },
+    ],
+  },
+  {
+    id: 'roof-no-access',
+    title: 'Roof Plant With No Safe Maintenance Access',
+    grade: ['graduate', 'engineer', 'technician', 'seniorTechnician'],
+    body: 'The GA leaves no clear path to the AHU filters. Facilities will hate you in five years.',
+    elements: ['E2'],
+    choices: [
+      {
+        id: 'design-out',
+        label: 'Design the risk out now',
+        result: 'Platform and clearances added. Hours now; safety forever.',
+        defaultClaim: 'led',
+        effects: { competence: 2, reputation: 2, commitmentPath: 2, hours: -8 },
+      },
+      {
+        id: 'leave-contractor',
+        label: 'Leave it to the contractor',
+        result: 'Snag later. Weak E2 — mentioned at best.',
+        defaultClaim: 'we',
+        effects: { fee: 1, reputation: -1, commitmentPath: -1 },
+      },
+    ],
+  },
+  {
+    id: 'low-carbon-option',
+    title: 'Low-Carbon Option Costs 4% More',
+    grade: ['engineer', 'senior', 'associate'],
+    body: 'Heat pumps beat gas on whole-life carbon. Capital is up. The client wants a recommendation.',
+    elements: ['E3', 'D2'],
+    choices: [
+      {
+        id: 'present-whole-life',
+        label: 'Present the whole-life case',
+        result: 'Clear options, carbon and cost. Strong E3/D2.',
+        defaultClaim: 'led',
+        effects: { reputation: 3, network: 2, commitmentPath: 2, competence: 1 },
+      },
+      {
+        id: 'drop-it',
+        label: 'Drop it to protect the fee',
+        result: 'Quiet win for capital. Sustainability evidence stalls.',
+        defaultClaim: 'we',
+        effects: { fee: 2, commitmentPath: -1 },
+      },
+    ],
+  },
+  {
+    id: 'supplier-hospitality',
+    title: 'Supplier Offers Hospitality During a Tender',
+    grade: ['graduate', 'engineer', 'senior'],
+    body: 'Match tickets and a “technical briefing” dinner land mid-tender for that manufacturer’s kit.',
+    elements: ['E5'],
+    choices: [
+      {
+        id: 'decline',
+        label: 'Decline and declare',
+        result: 'Clean ethics. Sponsor nods.',
+        defaultClaim: 'led',
+        effects: { reputation: 2, commitmentPath: 2, growth: 1 },
+      },
+      {
+        id: 'declare-only',
+        label: 'Declare but attend the briefing only',
+        result: 'Borderline. Credited as contributed if you document it.',
+        defaultClaim: 'contributed',
+        effects: { network: 1, commitmentPath: 1 },
+      },
+      {
+        id: 'accept',
+        label: 'Accept the hospitality',
+        result: 'Corner Cut. Procurement smell sticks.',
+        drawsCornerCut: true,
+        defaultClaim: 'we',
+        effects: { network: 2, reputation: -2, commitmentPath: -2 },
+      },
+    ],
+  },
+  {
+    id: 'left-off-site',
+    title: 'A Colleague Keeps Being Left Off Site Visits',
+    grade: ['graduate', 'engineer', 'senior', 'technician'],
+    body: 'Same person is always “not needed on site.” Pattern looks like exclusion.',
+    elements: ['D3'],
+    choices: [
+      {
+        id: 'raise-lead',
+        label: 'Raise it with the lead',
+        result: 'Awkward, then better. D3 demonstrated.',
+        defaultClaim: 'led',
+        effects: { reputation: 2, network: 1, commitmentPath: 2, wellbeing: -1 },
+      },
+      {
+        id: 'include-yourself',
+        label: 'Include them on your next visit',
+        result: 'You fix one instance. Good start.',
+        defaultClaim: 'contributed',
+        effects: { network: 2, commitmentPath: 1, wellbeing: 1 },
+      },
+      {
+        id: 'ignore',
+        label: 'Ignore it',
+        result: 'Culture debt. No D3 credit.',
+        defaultClaim: 'we',
+        effects: { wellbeing: -1, commitmentPath: -1 },
+      },
+    ],
+  },
+  {
+    id: 'bms-open-internet',
+    title: 'BMS Network Found Open to the Internet',
+    grade: ['engineer', 'senior', 'bimLead'],
+    body: 'A port scan during commissioning shows the BMS panel exposed. Cyber is part of B2.',
+    elements: ['B2'],
+    choices: [
+      {
+        id: 'segregate',
+        label: 'Segregate it now',
+        result: 'VLAN and firewall before handover. Strong B2.',
+        defaultClaim: 'led',
+        effects: { competence: 3, reputation: 2, commitmentPath: 2 },
+      },
+      {
+        id: 'flag-ict',
+        label: 'Flag it to ICT',
+        result: 'You contributed; ICT owns the fix.',
+        defaultClaim: 'contributed',
+        effects: { network: 2, competence: 1, commitmentPath: 1 },
+      },
+      {
+        id: 'ignore-cyber',
+        label: 'Ignore it — handover is Friday',
+        result: 'Corner Cut waiting to happen.',
+        drawsCornerCut: true,
+        defaultClaim: 'we',
+        effects: { fee: 1, reputation: -2, commitmentPath: -2 },
+      },
+    ],
+  },
+  {
+    id: 'overheating-complaint',
+    title: 'Overheating Complaint After Handover',
+    grade: ['engineer', 'senior', 'associate'],
+    body: 'Facilities call: west rooms bake every afternoon. Your calc assumptions are on trial (B3).',
+    elements: ['B3', 'A2'],
+    choices: [
+      {
+        id: 'investigate',
+        label: 'Investigate and feed back into the standard',
+        result: 'Root cause found. Design note updated. Strong B3.',
+        defaultClaim: 'led',
+        effects: { competence: 3, reputation: 2, commitmentPath: 2, growth: 1 },
+      },
+      {
+        id: 'blame-ops',
+        label: 'Blame operations and move on',
+        result: 'Relationship cools. Weak evaluation evidence.',
+        defaultClaim: 'we',
+        effects: { reputation: -1, network: -1, commitmentPath: -1 },
+      },
+    ],
+  },
+  {
+    id: 'harmonics-ups',
+    title: 'Harmonics Keep Tripping the UPS',
+    grade: ['engineer', 'senior'],
+    body: 'Non-linear loads keep taking out UPS input. Not a routine cable-sizing problem (A2).',
+    elements: ['A2'],
+    choices: [
+      {
+        id: 'research',
+        label: 'Research it yourself',
+        result: 'You dig into harmonics and filter options. Strong A2.',
+        defaultClaim: 'led',
+        effects: { competence: 3, growth: 2, commitmentPath: 2, hours: -16 },
+      },
+      {
+        id: 'specialist',
+        label: 'Call in a specialist',
+        result: 'Right call when time is short. Contributed A2.',
+        defaultClaim: 'contributed',
+        effects: { network: 2, competence: 1, commitmentPath: 1, fee: -1 },
       },
     ],
   },

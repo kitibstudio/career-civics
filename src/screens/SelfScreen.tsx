@@ -1,7 +1,15 @@
-import { GRADES, PATH_LABELS, SKILL_LABELS, STAGE_LABELS, STAGE_ORDER } from '../data/grades'
+import { GRADES, PATH_LABELS, PATH_ORDER, SKILL_LABELS, STAGE_LABELS, STAGE_ORDER } from '../data/grades'
 import { CHARACTERS } from '../data/characters'
-import type { GameState, SkillId } from '../data/types'
 import {
+  BODY_LABELS,
+  CPD_ANNUAL_TARGET,
+  EI_GROUPS,
+  UK_SPEC_ELEMENTS,
+} from '../data/ukSpec'
+import type { CharterBody, GameState, SkillId } from '../data/types'
+import {
+  canAttemptProfessionalReview,
+  cpdProgress,
   expectedLevel,
   growthNeedFor,
   milestonesFor,
@@ -19,15 +27,25 @@ const SKILLS: SkillId[] = [
 ]
 
 const FILL = ['#ffffff', '#e6e6e6', '#c4c4c4', '#8f8f8f', '#4d4d4d', '#111111']
+const STRENGTH_LABEL = {
+  none: '—',
+  mentioned: 'men',
+  demonstrated: 'dem',
+  strong: 'str',
+} as const
 
 export function SelfScreen({
   state,
   onAskFeedback,
   onPlanGaps,
+  onCharterBody,
+  onCharterReview,
 }: {
   state: GameState
   onAskFeedback?: () => void
   onPlanGaps?: () => void
+  onCharterBody?: (body: CharterBody) => void
+  onCharterReview?: () => void
 }) {
   const grade = GRADES[state.grade]
   const character = CHARACTERS.find((c) => c.id === state.characterId)
@@ -40,6 +58,8 @@ export function SelfScreen({
   const timer = grade.baseTimer
   const hiddenCount = state.grid.filter((c) => !c.revealed).length
   const cfg = { m1: state.grade === 'graduate' || state.grade === 'technician' ? 1 : 2 }
+  const cpd = cpdProgress(state)
+  const reviewReady = canAttemptProfessionalReview(state)
 
   return (
     <section className="screen self-mono">
@@ -89,8 +109,8 @@ export function SelfScreen({
         </div>
 
         <div className="self-paths">
-          {(['delivery', 'technical', 'collaboration', 'leadership'] as const).map((p) => {
-            const v = state.paths[p]
+          {PATH_ORDER.map((p) => {
+            const v = state.paths[p] ?? 0
             const m1 = cfg.m1
             const m2 = state.grade === 'graduate' || state.grade === 'technician' ? 3 : 4
             const atRisk = v <= m1
@@ -176,6 +196,115 @@ export function SelfScreen({
                 </tbody>
               </table>
             </div>
+
+            <h3 className="self-section" style={{ marginTop: '1.25rem' }}>
+              Chartership evidence · {BODY_LABELS[state.charterBody]}
+            </h3>
+            <p className="self-sub">
+              17 UK-SPEC elements (A1–E5). Strength: none / mentioned / demonstrated / strong.
+              “I led” → strong; “I contributed” → demonstrated; “we” → mentioned. Body choice only
+              changes grouping.
+            </p>
+            {onCharterBody && (
+              <div className="charter-body-pick">
+                <button
+                  type="button"
+                  className={`self-btn${state.charterBody === 'cibse' ? ' solid' : ''}`}
+                  onClick={() => onCharterBody('cibse')}
+                >
+                  CIBSE / IET
+                </button>
+                <button
+                  type="button"
+                  className={`self-btn${state.charterBody === 'engineersIreland' ? ' solid' : ''}`}
+                  onClick={() => onCharterBody('engineersIreland')}
+                >
+                  Engineers Ireland
+                </button>
+              </div>
+            )}
+            {state.charterBody === 'engineersIreland' ? (
+              <div className="ukspec-ei">
+                {EI_GROUPS.map((g) => (
+                  <div key={g.id} className="ukspec-ei-group">
+                    <strong>{g.title}</strong>
+                    <div className="ukspec-row">
+                      {g.elements.map((id) => {
+                        const s = state.elementStrength[id] ?? 'none'
+                        return (
+                          <span key={id} className={`ukspec-cell s-${s}`} title={UK_SPEC_ELEMENTS.find((e) => e.id === id)?.title}>
+                            {id}
+                            <em>{STRENGTH_LABEL[s]}</em>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="ukspec-grid">
+                {(['A', 'B', 'C', 'D', 'E'] as const).map((theme) => (
+                  <div key={theme} className="ukspec-theme">
+                    <div className="ukspec-theme-label">{theme}</div>
+                    <div className="ukspec-row">
+                      {UK_SPEC_ELEMENTS.filter((e) => e.theme === theme).map((e) => {
+                        const s = state.elementStrength[e.id] ?? 'none'
+                        return (
+                          <span key={e.id} className={`ukspec-cell s-${s}`} title={`${e.title} · ${s}`}>
+                            {e.code}
+                            <em>{STRENGTH_LABEL[s]}</em>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="charter-meta">
+              <div>
+                CPD: <strong className="mono">{cpd.total} / {CPD_ANNUAL_TARGET}h</strong> (planned{' '}
+                {cpd.planned} · unplanned {cpd.unplanned})
+              </div>
+              <div>
+                Sponsor: <strong>{state.sponsor.name}</strong> · tie {state.sponsor.tieStrength}/3
+              </div>
+              <div>
+                DAP — short: {state.actionPlan.short}
+              </div>
+              <div className="self-sub">
+                Medium: {state.actionPlan.medium} · Long: {state.actionPlan.long}
+              </div>
+              {onCharterReview && (
+                <button
+                  type="button"
+                  className="self-btn solid"
+                  disabled={!reviewReady}
+                  onClick={onCharterReview}
+                >
+                  {state.professionalReview.passed
+                    ? 'Professional Review passed'
+                    : reviewReady
+                      ? 'Sit Professional Review'
+                      : 'Professional Review · need all elements ≥ demonstrated'}
+                </button>
+              )}
+            </div>
+            {!!state.charterLog.length && (
+              <details className="charter-log">
+                <summary>Evidence log ({state.charterLog.length})</summary>
+                <ul>
+                  {state.charterLog.slice(0, 12).map((e) => (
+                    <li key={e.id}>
+                      <span className="mono">M{e.turn}</span> {e.title} · {e.elements.join(',')} ·{' '}
+                      {e.claim}
+                      {!e.credited ? ' (not credited)' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
 
             <h3 className="self-section" style={{ marginTop: '1.25rem' }}>
               {grade.name} milestones

@@ -12,6 +12,8 @@ const PATH_HOW: Record<PathId, string> = {
     'Interfaces — Work Across, client meetings, clash cycles, site visits, Lunch & Learn. Network and Reputation yields feed this path.',
   leadership:
     'People — Ask Up, Support Down, mentoring, CPD. Growth and Reputation yields from these actions lift Leadership.',
+  commitment:
+    'Professional commitment (UK-SPEC E) — risk reviews, carbon options, ethics/conduct, CPD hours, chartership log. Neglect draws Corner Cut; Engineer+ gate needs Commitment at M1.',
 }
 
 export function PathExplain({ state }: { state: GameState }) {

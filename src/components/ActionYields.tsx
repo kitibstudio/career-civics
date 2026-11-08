@@ -16,6 +16,7 @@ const PATH_LABEL: Record<PathId, string> = {
   technical: 'Technical',
   collaboration: 'Collaboration',
   leadership: 'Leadership',
+  commitment: 'Commitment',
 }
 
 function fmt(n: number): string {

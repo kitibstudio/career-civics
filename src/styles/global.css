@@ -1173,6 +1173,76 @@ a {
   background: var(--ink);
   border-color: var(--ink);
 }
+.charter-body-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.ukspec-grid,
+.ukspec-ei {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.ukspec-theme,
+.ukspec-ei-group {
+  display: grid;
+  gap: 0.25rem;
+}
+.ukspec-theme-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ukspec-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.ukspec-cell {
+  border: 1px solid #111;
+  padding: 0.25rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  min-width: 2.6rem;
+  text-align: center;
+  background: #fff;
+}
+.ukspec-cell em {
+  display: block;
+  font-style: normal;
+  opacity: 0.7;
+  font-size: 0.65rem;
+}
+.ukspec-cell.s-none {
+  background: #f7f7f7;
+  color: #888;
+}
+.ukspec-cell.s-mentioned {
+  background: #e8e8e8;
+}
+.ukspec-cell.s-demonstrated {
+  background: #cfcfcf;
+}
+.ukspec-cell.s-strong {
+  background: #111;
+  color: #fff;
+}
+.charter-meta {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  margin-bottom: 0.75rem;
+}
+.charter-log {
+  margin: 0.5rem 0 1rem;
+  font-size: 0.85rem;
+}
+.charter-log ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
 @media (max-width: 860px) {
   .self-ready,
   .self-main,

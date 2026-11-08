@@ -3,6 +3,7 @@ import { TopNav } from './components/TopNav'
 import { useGame } from './hooks/useGame'
 import { CharacterScreen } from './screens/CharacterScreen'
 import { CardsScreen } from './screens/CardsScreen'
+import { CharterReviewScreen } from './screens/CharterReviewScreen'
 import { DeskScreen } from './screens/DeskScreen'
 import { EventScreen } from './screens/EventScreen'
 import { PromotionScreen } from './screens/PromotionScreen'
@@ -60,9 +61,9 @@ export default function App() {
       {screen === 'character' && (
         <CharacterScreen
           onBack={() => setPicking(false)}
-          onPick={(id) => {
+          onPick={(id, charterBody) => {
             setPicking(false)
-            dispatch({ type: 'new', characterId: id })
+            dispatch({ type: 'new', characterId: id, charterBody })
           }}
         />
       )}
@@ -82,6 +83,8 @@ export default function App() {
           state={state}
           onAskFeedback={() => dispatch({ type: 'act', actionId: 'ask-feedback' })}
           onPlanGaps={() => dispatch({ type: 'screen', screen: 'desk' })}
+          onCharterBody={(body) => dispatch({ type: 'charterBody', body })}
+          onCharterReview={() => dispatch({ type: 'charterReview' })}
         />
       )}
 
@@ -106,7 +109,18 @@ export default function App() {
       )}
 
       {state && screen === 'event' && (
-        <EventScreen state={state} onChoose={(id) => dispatch({ type: 'event', choiceId: id })} />
+        <EventScreen
+          state={state}
+          onChoose={(id) => dispatch({ type: 'event', choiceId: id })}
+          onClaim={(claim) => dispatch({ type: 'eventClaim', claim })}
+        />
+      )}
+
+      {state && screen === 'charterReview' && (
+        <CharterReviewScreen
+          state={state}
+          onDone={() => dispatch({ type: 'finishCharterReview' })}
+        />
       )}
 
       {state && screen === 'win' && (

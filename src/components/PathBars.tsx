@@ -1,7 +1,7 @@
-import { PATH_LABELS, gateConfig } from '../data/grades'
+import { PATH_LABELS, PATH_ORDER, gateConfig } from '../data/grades'
 import type { GradeId, PathScores } from '../data/types'
 
-const PATHS = ['delivery', 'technical', 'collaboration', 'leadership'] as const
+const PATHS = PATH_ORDER
 
 export function PathBars({
   paths,
@@ -27,7 +27,8 @@ export function PathBars({
           Path points land at six-monthly Reviews (not when you click desk actions).{' '}
           <strong>M1</strong> = minimum on every path to pass the gate. <strong>M2</strong> = strong
           path (need ≥{cfg.gateStrong}). <strong>Golden</strong> = exceptional (Habit carry on
-          promotion).
+          promotion). From Engineer grade, <strong>Commitment</strong> (UK-SPEC E — safety, ethics,
+          sustainability, CPD) must also sit at M1 or Corner Cut risks drawing.
         </p>
       </details>
 

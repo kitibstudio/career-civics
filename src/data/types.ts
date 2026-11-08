@@ -1,5 +1,10 @@
 export type Track = 'engineer' | 'technician'
-export type PathId = 'delivery' | 'technical' | 'collaboration' | 'leadership'
+export type PathId =
+  | 'delivery'
+  | 'technical'
+  | 'collaboration'
+  | 'leadership'
+  | 'commitment'
 export type SkillId = 'technical' | 'communication' | 'presenting' | 'coordination' | 'commercial'
 export type StageId =
   | 'concept'
@@ -48,7 +53,79 @@ export type ScreenId =
   | 'review'
   | 'promotion'
   | 'event'
+  | 'charterReview'
   | 'win'
+
+export type CharterBody = 'cibse' | 'engineersIreland'
+export type UkSpecElementId =
+  | 'A1'
+  | 'A2'
+  | 'B1'
+  | 'B2'
+  | 'B3'
+  | 'C1'
+  | 'C2'
+  | 'C3'
+  | 'C4'
+  | 'D1'
+  | 'D2'
+  | 'D3'
+  | 'E1'
+  | 'E2'
+  | 'E3'
+  | 'E4'
+  | 'E5'
+export type EvidenceStrength = 'none' | 'mentioned' | 'demonstrated' | 'strong'
+/** How the player describes their part when logging an episode ("I, not we"). */
+export type ClaimRole = 'led' | 'contributed' | 'we'
+
+export interface UkSpecElement {
+  id: UkSpecElementId
+  code: string
+  theme: 'A' | 'B' | 'C' | 'D' | 'E'
+  title: string
+  short: string
+}
+
+export interface CharterEvidenceEntry {
+  id: string
+  turn: number
+  source: 'action' | 'event' | 'cpd' | 'review'
+  title: string
+  elements: UkSpecElementId[]
+  claim: ClaimRole
+  /** Assessor credits only led/contributed that match real play; we = mentioned only. */
+  credited: boolean
+  note?: string
+}
+
+export interface SponsorState {
+  id: string
+  name: string
+  /** 0–3; stronger ties speed Professional Review prep. */
+  tieStrength: number
+}
+
+export interface DevelopmentActionPlan {
+  short: string
+  medium: string
+  long: string
+  lastReviewedTurn: number
+}
+
+export interface CpdState {
+  /** Hours toward the 40h annual target (Engineers Ireland minimum). */
+  plannedHours: number
+  unplannedHours: number
+  yearStartTurn: number
+}
+
+export interface ProfessionalReviewState {
+  attempted: boolean
+  passed: boolean
+  deferredElements: UkSpecElementId[]
+  notes: string[]
+}
 
 export interface YieldEffect {
   yield: YieldId
@@ -117,6 +194,10 @@ export interface ActionDef {
   tags: string[]
   /** Skills this action builds evidence for (at the live project stage). */
   skills?: SkillId[]
+  /** UK-SPEC elements this action can log (player claims role on Self / auto-contributed). */
+  elements?: UkSpecElementId[]
+  /** Planned CPD hours when this action is taken (usually 8). */
+  cpdHours?: number
   effects: Partial<{
     competence: number
     reputation: number
@@ -137,10 +218,16 @@ export interface EventDef {
   title: string
   grade: GradeId[]
   body: string
+  /** UK-SPEC elements this event can evidence. */
+  elements?: UkSpecElementId[]
   choices: {
     id: string
     label: string
     result: string
+    /** Suggested claim strength if the player picks this choice. */
+    defaultClaim?: ClaimRole
+    /** If true, this choice draws Corner Cut / ethics failure. */
+    drawsCornerCut?: boolean
     effects: Partial<{
       competence: number
       reputation: number
@@ -149,6 +236,7 @@ export interface EventDef {
       wellbeing: number
       hours: number
       growth: number
+      commitmentPath?: number
     }>
   }[]
 }
@@ -168,6 +256,7 @@ export interface PathScores {
   technical: number
   collaboration: number
   leadership: number
+  commitment: number
 }
 
 export interface GridCell {
@@ -270,4 +359,15 @@ export interface GameState {
   justPromoted: boolean
   /** Visible wellbeing floor; at or below triggers Burnout. */
   wellbeingFloor: number
+  /** Chartership body chosen at career start. */
+  charterBody: CharterBody
+  sponsor: SponsorState
+  actionPlan: DevelopmentActionPlan
+  /** Best evidence strength per UK-SPEC element. */
+  elementStrength: Record<UkSpecElementId, EvidenceStrength>
+  charterLog: CharterEvidenceEntry[]
+  cpd: CpdState
+  professionalReview: ProfessionalReviewState
+  /** Pending claim step after an event choice (I / contributed / we). */
+  pendingClaim: null | { eventId: string; choiceId: string }
 }

@@ -5,7 +5,16 @@ export const PATH_LABELS: Record<PathId, string> = {
   technical: 'Technical',
   collaboration: 'Collaboration',
   leadership: 'Leadership',
+  commitment: 'Commitment',
 }
+
+export const PATH_ORDER: PathId[] = [
+  'delivery',
+  'technical',
+  'collaboration',
+  'leadership',
+  'commitment',
+]
 
 export const STAGE_ORDER = [
   'concept',
@@ -47,7 +56,7 @@ export const GRADES: Record<string, GradeDef> = {
       { id: 'designReview', label: 'Pass a design review', path: 'delivery' },
       { id: 'siteVisits', label: 'Log 20 site visits', path: 'collaboration' },
       { id: 'drawingSet', label: 'Complete a full drawing set', path: 'delivery' },
-      { id: 'charterLog', label: 'Start a chartership log', path: 'leadership' },
+      { id: 'charterLog', label: 'Open chartership log (5+ entries)', path: 'commitment' },
     ],
     crisis: {
       id: 'designFreeze',
@@ -77,7 +86,7 @@ export const GRADES: Record<string, GradeDef> = {
       { id: 'clientSolo', label: 'Client meeting solo', path: 'collaboration' },
       { id: 'specSection', label: 'Sign off a spec section', path: 'technical' },
       { id: 'mentorGrad', label: 'Mentor a graduate', path: 'leadership' },
-      { id: 'chartership', label: 'Achieve chartership', path: 'technical' },
+      { id: 'chartership', label: 'Pass Professional Review', path: 'commitment' },
     ],
     crisis: {
       id: 'valueEngineering',

@@ -1,24 +1,28 @@
 import { useEffect, useReducer } from 'react'
-import type { GameState, ScreenId } from '../data/types'
+import type { CharterBody, ClaimRole, GameState, ScreenId } from '../data/types'
 import {
+  attemptCharterReview,
   clearSave,
   continueAfterPromotion,
   createNewGame,
   endMonth,
+  finishCharterReview,
   finishReview,
   loadGame,
   performAction,
   promote,
   resolveEventChoice,
+  resolveEventClaim,
   resolveInbox,
   saveGame,
+  setCharterBody,
   setScreen,
   toggleCard,
 } from '../game/engine'
 
 type Action =
   | { type: 'hydrate'; state: GameState | null }
-  | { type: 'new'; characterId: string }
+  | { type: 'new'; characterId: string; charterBody?: CharterBody }
   | { type: 'screen'; screen: ScreenId }
   | { type: 'act'; actionId: string }
   | { type: 'endMonth' }
@@ -27,7 +31,11 @@ type Action =
   | { type: 'promote'; keepHabitId?: string }
   | { type: 'afterPromo' }
   | { type: 'event'; choiceId: string }
+  | { type: 'eventClaim'; claim: ClaimRole }
   | { type: 'inbox'; defId: string; choiceId: string }
+  | { type: 'charterBody'; body: CharterBody }
+  | { type: 'charterReview' }
+  | { type: 'finishCharterReview' }
   | { type: 'reset' }
   | { type: 'tipSeen' }
 
@@ -36,7 +44,7 @@ function reducer(state: GameState | null, action: Action): GameState | null {
     case 'hydrate':
       return action.state
     case 'new':
-      return createNewGame(action.characterId)
+      return createNewGame(action.characterId, { charterBody: action.charterBody })
     case 'reset':
       clearSave()
       return null
@@ -56,8 +64,16 @@ function reducer(state: GameState | null, action: Action): GameState | null {
       return state ? continueAfterPromotion(state) : state
     case 'event':
       return state ? resolveEventChoice(state, action.choiceId) : state
+    case 'eventClaim':
+      return state ? resolveEventClaim(state, action.claim) : state
     case 'inbox':
       return state ? resolveInbox(state, action.defId, action.choiceId) : state
+    case 'charterBody':
+      return state ? setCharterBody(state, action.body) : state
+    case 'charterReview':
+      return state ? attemptCharterReview(state) : state
+    case 'finishCharterReview':
+      return state ? finishCharterReview(state) : state
     case 'tipSeen':
       return state ? { ...state, tipSeen: true } : state
     default:

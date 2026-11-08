@@ -44,10 +44,17 @@ export const MILESTONE_SPECS: Partial<Record<GradeId, MilestoneSpec[]>> = {
     },
     {
       id: 'charterLog',
-      label: 'Start a chartership log',
-      path: 'leadership',
-      target: 4,
-      actions: ['chartership-log', 'cpd-friday'],
+      label: 'Open chartership log (5+ entries)',
+      path: 'commitment',
+      target: 5,
+      actions: [
+        'chartership-log',
+        'cpd-friday',
+        'risk-review',
+        'carbon-option',
+        'conduct-dilemma',
+      ],
+      perAction: 1,
     },
   ],
   engineer: [
@@ -81,10 +88,10 @@ export const MILESTONE_SPECS: Partial<Record<GradeId, MilestoneSpec[]>> = {
     },
     {
       id: 'chartership',
-      label: 'Achieve chartership',
-      path: 'technical',
-      target: 12,
-      actions: ['chartership-log', 'cpd-friday'],
+      label: 'Pass Professional Review',
+      path: 'commitment',
+      target: 1,
+      actions: ['professional-review'],
     },
   ],
   technician: [
