@@ -82,15 +82,72 @@ export function PromotionScreen({
           </div>
         )}
 
-        <button
-          className="btn btn-ink"
-          onClick={() => {
-            if (next) onPromote(keep)
-            else onPromote()
-          }}
-        >
-          {next ? `Promote to ${next.name}` : 'Complete Legacy Path'}
-        </button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '1rem' }}>
+          <button
+            className="btn btn-ink"
+            onClick={() => {
+              if (next) onPromote(keep)
+              else onPromote()
+            }}
+          >
+            {next ? `Promote to ${next.name}` : 'Complete Legacy Path'}
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}
+            onClick={() => {
+              window.alert(
+                'Pivot: stay on your track for now, or note a future move (Electrical→ICT, Engineer→PM, Technician→Engineer). Full pivot routes unlock in a later patch — your mentor has logged the interest.',
+              )
+              if (next) onPromote(keep)
+              else onPromote()
+            }}
+          >
+            Pivot discipline…
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}
+            onClick={() => {
+              const lines = [
+                `Career Civics debrief — ${character?.name ?? ''} · ${grade.name}`,
+                `Charter body: ${state.charterBody}`,
+                `Sponsor: ${state.sponsor.name} (tie ${state.sponsor.tieStrength}/3)`,
+                `Paths: ${JSON.stringify(state.paths)}`,
+                `Milestones: ${state.milestonesHit.join(', ') || 'none'}`,
+                `Growth banked: ${state.growthBanked}`,
+                `CPD: ${state.cpd.plannedHours + state.cpd.unplannedHours}h (planned ${state.cpd.plannedHours} / unplanned ${state.cpd.unplannedHours})`,
+                `DAP short: ${state.actionPlan.short}`,
+                `DAP medium: ${state.actionPlan.medium}`,
+                `DAP long: ${state.actionPlan.long}`,
+                '',
+                'Chartership practice sheet (UK-SPEC A1–E5) — game episodes are practice, never real evidence:',
+                ...Object.entries(state.elementStrength).map(([id, s]) => {
+                  const eps = state.charterLog
+                    .filter((e) => e.elements.includes(id as keyof typeof state.elementStrength))
+                    .slice(0, 3)
+                    .map((e) => `M${e.turn} ${e.title} (${e.claim})`)
+                    .join('; ')
+                  return `${id}: ${s}${eps ? ` — ${eps}` : ''} | Your real equivalent: …`
+                }),
+                '',
+                'Feedback:',
+                ...(state.feedbackLog.map((f) => `M${f.turn}: ${f.text}`) || ['none']),
+              ]
+              const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `career-civics-debrief-${character?.id ?? 'player'}.txt`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+          >
+            Export chartership practice sheet
+          </button>
+        </div>
       </div>
     </section>
   )

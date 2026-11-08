@@ -1,4 +1,5 @@
 import { CARD_BY_ID } from '../data/cards'
+import { deskifyCardText } from '../data/deskNames'
 import { PATH_LABELS } from '../data/grades'
 import type { GameState } from '../data/types'
 import { availableCards, slotCount } from '../game/engine'
@@ -60,9 +61,9 @@ export function CardsScreen({
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem' }}>
                   {card.name}
                 </div>
-                <div style={{ fontSize: '0.9rem' }}>{card.effect}</div>
+                <div style={{ fontSize: '0.9rem' }}>{deskifyCardText(card.effect)}</div>
                 <div className="muted" style={{ fontSize: '0.82rem', marginTop: 'auto' }}>
-                  In practice: {card.practice}
+                  In practice: {deskifyCardText(card.practice)}
                 </div>
               </button>
             )

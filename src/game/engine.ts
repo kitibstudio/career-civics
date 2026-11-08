@@ -7,10 +7,37 @@ import {
   startingSpecialism,
 } from '../data/cards'
 import { CHARACTERS } from '../data/characters'
-import { GRADES, STAGE_ORDER, gateConfig } from '../data/grades'
+import { GRADES, PATH_ORDER, STAGE_ORDER, gateConfig } from '../data/grades'
+import { INBOX_POOL, inboxForGrade } from '../data/inbox'
+import {
+  defaultActionPlan,
+  defaultSponsor,
+  emptyEvidenceMap,
+} from '../data/ukSpec'
+import {
+  addCpdHours,
+  applyActionChartership,
+  canAttemptProfessionalReview,
+  commitmentPathDeltaFromActions,
+  ensureChartership,
+  logEvidence,
+  runProfessionalReview,
+} from './chartership'
+import {
+  applyMilestoneProgress,
+  defaultTies,
+  enforceRoleModelCap,
+  gainGridEvidence,
+  growthNeedFor,
+  monthInCycle,
+  rateCard,
+  revealPriorityCell,
+} from './progress'
+import { canPromoteNormal } from './promotion'
 import type {
   ActionDef,
   CardDef,
+  ClaimRole,
   GameState,
   GradeId,
   GridCell,
@@ -23,8 +50,8 @@ import type {
   StageId,
 } from '../data/types'
 
-const PATHS: PathId[] = ['delivery', 'technical', 'collaboration', 'leadership']
-const STORAGE_KEY = 'career-civics-save-v1'
+const PATHS: PathId[] = [...PATH_ORDER]
+const STORAGE_KEY = 'career-civics-save-v3'
 
 const RATING_MULT: Record<Rating, number> = {
   notShown: 0,
@@ -34,7 +61,13 @@ const RATING_MULT: Record<Rating, number> = {
 }
 
 function emptyPaths(): PathScores {
-  return { delivery: 0, technical: 0, collaboration: 0, leadership: 0 }
+  return { delivery: 0, technical: 0, collaboration: 0, leadership: 0, commitment: 0 }
+}
+
+function commitmentRequired(grade: GradeId): boolean {
+  return ['engineer', 'senior', 'associate', 'seniorTechnician', 'bimLead', 'leadCoordinator'].includes(
+    grade,
+  )
 }
 
 function clone<T>(v: T): T {
@@ -56,14 +89,16 @@ function makeGrid(skills: Record<SkillId, number>): GridCell[] {
   const cells: GridCell[] = []
   for (const skill of skillIds) {
     for (const stage of STAGE_ORDER) {
-      const base = skills[skill] ?? 0
+      const base = Math.min(2, skills[skill] ?? 0)
       const soft = skill !== 'technical'
       cells.push({
         skill,
         stage,
-        level: Math.max(0, base),
+        level: soft ? 0 : Math.max(0, Math.min(1, base)),
         selfRating: Math.max(0, base + (soft ? 1 : 0)),
         revealed: !soft,
+        evidence: soft ? 0 : base >= 1 ? 2 : 0,
+        confirmed: false,
       })
     }
   }
@@ -112,7 +147,10 @@ function demoProjects(grade: GradeId): GameState['projects'] {
   ]
 }
 
-export function createNewGame(characterId: string): GameState {
+export function createNewGame(
+  characterId: string,
+  opts?: { charterBody?: GameState['charterBody'] },
+): GameState {
   const character = CHARACTERS.find((c) => c.id === characterId) ?? CHARACTERS[0]
   const grade: GradeId = character.track === 'technician' ? 'technician' : 'graduate'
   const spec = startingSpecialism(character.discipline)
@@ -135,6 +173,15 @@ export function createNewGame(characterId: string): GameState {
       wellbeing: 12,
       growth: 0,
     },
+    monthStartResources: {
+      hours: 160,
+      competence: 4,
+      reputation: 2,
+      network: 2,
+      fee: 10,
+      wellbeing: 12,
+      growth: 0,
+    },
     paths: emptyPaths(),
     growthBanked: 0,
     slotted: [habit, ...(spec ? [spec] : [])].slice(0, GRADES[grade].slots),
@@ -147,11 +194,18 @@ export function createNewGame(characterId: string): GameState {
     celebrationExpires: 0,
     specialistWaive: null,
     milestonesHit: [],
+    milestoneProgress: {},
     grid: makeGrid(character.skills),
     projects: demoProjects(grade),
     actionsThisMonth: [],
     actionsThisReview: [],
+    actionMonthsThisReview: {},
     pendingEvent: null,
+    inbox: [],
+    inboxUsed: [],
+    ties: defaultTies(character.discipline),
+    feedbackLog: [],
+    positiveFeedbackThisReview: false,
     reviewsDone: 0,
     lastReview: null,
     log: [],
@@ -163,14 +217,39 @@ export function createNewGame(characterId: string): GameState {
     ended: null,
     burnoutTurns: 0,
     justPromoted: false,
+    wellbeingFloor: 4,
+    charterBody: opts?.charterBody ?? 'cibse',
+    sponsor: defaultSponsor(character.discipline),
+    actionPlan: defaultActionPlan(grade),
+    elementStrength: emptyEvidenceMap(),
+    charterLog: [],
+    cpd: { plannedHours: 0, unplannedHours: 0, yearStartTurn: 1 },
+    professionalReview: {
+      attempted: false,
+      passed: false,
+      deferredElements: [],
+      notes: [],
+    },
+    pendingClaim: null,
+    pendingCommitment: 0,
   }
 
+  refreshInbox(state)
   pushLog(
     state,
-    `Welcome, ${character.name}. Second Pair of Eyes is always on. Slot Habits and Specialisms, then spend your hours.`,
+    `Welcome, ${character.name}. Second Pair of Eyes is always on. Commitment path (E) is open — pick a sponsor (${state.sponsor.name}) and log evidence against UK-SPEC.`,
     'good',
   )
   return state
+}
+
+function refreshInbox(state: GameState) {
+  const defs = inboxForGrade(state.grade, state.turn, state.inboxUsed)
+  state.inbox = defs.map((d) => ({
+    defId: d.id,
+    monthsLeft: d.neededBy === 'scheme' ? 2 : 3,
+    resolved: false,
+  }))
 }
 
 export function slotCount(state: GameState): number {
@@ -196,26 +275,28 @@ function applyResource(
   res[key] = Math.round((res[key] + delta * mult) * 10) / 10
 }
 
-function bumpGrid(state: GameState, skill?: SkillId, stage?: StageId) {
-  if (!skill || !stage) return
-  const cell = state.grid.find((c) => c.skill === skill && c.stage === stage)
-  if (!cell) return
-  if (Math.random() < 0.55) cell.level = Math.min(5, cell.level + 1)
-  if (!cell.revealed) cell.selfRating = Math.min(5, cell.selfRating + 1)
-}
-
 function revealFeedback(state: GameState) {
-  const hidden = state.grid.filter((c) => !c.revealed)
-  if (!hidden.length) return
-  const cell = hidden[Math.floor(Math.random() * hidden.length)]
-  cell.revealed = true
-  // sometimes feedback is lower than self-rating
-  if (Math.random() < 0.35) cell.level = Math.max(0, cell.selfRating - 1)
-  else cell.level = Math.max(cell.level, Math.min(5, cell.selfRating))
+  const cell = revealPriorityCell(state)
+  if (!cell) return
+  state.positiveFeedbackThisReview = true
+  const thought = cell.selfRating
+  const entry = {
+    turn: state.turn,
+    source: '1:1 / Ask for feedback',
+    text:
+      cell.level < thought
+        ? `You thought ${thought}; actual ${cell.level}. Seek practice before the next review.`
+        : `Confirmed ${cell.skill} @ ${cell.stage} at level ${cell.level}.`,
+    skill: cell.skill,
+    stage: cell.stage,
+    thought,
+    actual: cell.level,
+  }
+  state.feedbackLog = [entry, ...state.feedbackLog].slice(0, 30)
   pushLog(
     state,
-    `Feedback reveals ${cell.skill} @ ${cell.stage}: level ${cell.level} (you thought ${cell.selfRating}).`,
-    cell.level < cell.selfRating ? 'warn' : 'good',
+    `Feedback reveals ${cell.skill} @ ${cell.stage}: level ${cell.level} (you thought ${thought}).`,
+    cell.level < thought ? 'warn' : 'good',
   )
 }
 
@@ -261,8 +342,134 @@ function cardBonus(state: GameState, action: ActionDef): Partial<Resources> {
 }
 
 export function canAfford(state: GameState, action: ActionDef): boolean {
-  if (action.hours < 0) return true // overtime adds hours
+  if (action.hours < 0) return true // legacy: negative hours add capacity
   return state.resources.hours >= action.hours
+}
+
+/** Civ-style yield preview for one selection of an action (includes slotted card bonuses). */
+export function actionYieldPreview(
+  state: GameState,
+  action: ActionDef,
+): {
+  hoursDelta: number
+  resources: Partial<Record<keyof Resources, number>>
+  projectProgress: number
+  pathLean: PathId[]
+  reviewHint?: string
+} {
+  const burnout = state.burnoutTurns > 0
+  const bonus = cardBonus(state, action)
+  const resources: Partial<Record<keyof Resources, number>> = {}
+  const keys: (keyof Resources)[] = [
+    'competence',
+    'reputation',
+    'network',
+    'fee',
+    'wellbeing',
+    'growth',
+  ]
+  for (const key of keys) {
+    const base = (action.effects[key as keyof typeof action.effects] as number | undefined) ?? 0
+    const extra = bonus[key] ?? 0
+    let total = base + extra
+    if (!total) continue
+    if (burnout && key !== 'wellbeing' && key !== 'hours') total = Math.round(total * 0.5 * 10) / 10
+    resources[key] = total
+  }
+
+  const pathLean: PathId[] = []
+  const tags = new Set(action.tags)
+  if (tags.has('delivery') || tags.has('tender') || tags.has('commercial')) pathLean.push('delivery')
+  if (tags.has('technical') || tags.has('detailed') || tags.has('software')) pathLean.push('technical')
+  if (tags.has('commitment') || tags.has('safety') || tags.has('ethics') || tags.has('sustainability') || tags.has('charter'))
+    pathLean.push('commitment')
+  if (tags.has('collaboration') || tags.has('coordination') || tags.has('network')) {
+    pathLean.push('collaboration')
+  }
+  if (tags.has('leadership') || tags.has('feedback')) pathLean.push('leadership')
+
+  let reviewHint: string | undefined
+  if (action.id === 'unutilized') {
+    reviewHint =
+      'Yields while idle: Fee & Wellbeing fall; Competence, Reputation, Network, Growth earn nothing. Delivery path −1 per block at Review.'
+  }
+
+  return {
+    hoursDelta: -action.hours,
+    resources,
+    projectProgress: action.effects.projectProgress ?? 0,
+    pathLean,
+    reviewHint,
+  }
+}
+
+export function timesUsedThisMonth(state: GameState, actionId: string): number {
+  return state.actionsThisMonth.filter((id) => id === actionId).length
+}
+
+/** Month-to-date yield deltas vs the start-of-month snapshot (always includes every yield, even +0). */
+export function monthPlanYieldDeltas(state: GameState): Record<keyof Resources, number> {
+  const start = state.monthStartResources ?? state.resources
+  const keys: (keyof Resources)[] = [
+    'hours',
+    'competence',
+    'reputation',
+    'network',
+    'fee',
+    'wellbeing',
+    'growth',
+  ]
+  const out = {} as Record<keyof Resources, number>
+  for (const key of keys) {
+    out[key] = Math.round((state.resources[key] - start[key]) * 10) / 10
+  }
+  return out
+}
+
+/** Evidence counts this review cycle — what feeds each promotion path. */
+export function pathActionEvidence(state: GameState): Record<PathId, { label: string; count: number }[]> {
+  const counts = state.actionsThisReview.reduce<Record<string, number>>((acc, id) => {
+    acc[id] = (acc[id] ?? 0) + 1
+    return acc
+  }, {})
+  const n = (id: string) => counts[id] ?? 0
+  return {
+    delivery: [
+      { label: 'Issue drawings', count: n('drawing-set') },
+      { label: 'Design review', count: n('design-review') },
+      { label: 'Timesheets', count: n('timesheets') },
+      { label: 'Unutilized (−8h)', count: n('unutilized') },
+    ].filter((x) => x.count > 0),
+    technical: [
+      { label: 'Calc package', count: n('calc-package') },
+      { label: 'Model layouts', count: n('model-layouts') },
+      { label: 'Automate', count: n('automate') },
+      { label: 'CPD', count: n('cpd-friday') },
+      { label: 'Learn Revit', count: n('learn-revit') },
+    ].filter((x) => x.count > 0),
+    collaboration: [
+      { label: 'Work Across', count: n('work-across') },
+      { label: 'Client meeting', count: n('client-meeting') },
+      { label: 'Clash cycle', count: n('clash-cycle') },
+      { label: 'Lunch & Learn', count: n('lunch-learn') },
+      { label: 'Site visit', count: n('site-visit') },
+    ].filter((x) => x.count > 0),
+    leadership: [
+      { label: 'Ask Up', count: n('ask-mentor') },
+      { label: 'Support Down', count: n('mentor-junior') },
+      { label: 'Peer drawing check', count: n('peer-check') },
+      { label: 'CPD', count: n('cpd-friday') },
+    ].filter((x) => x.count > 0),
+    commitment: [
+      { label: 'Risk review', count: n('risk-review') },
+      { label: 'Carbon option', count: n('carbon-option') },
+      { label: 'Ethics / conduct', count: n('conduct-dilemma') },
+      { label: 'Requirements', count: n('requirements-brief') },
+      { label: 'Evaluate built', count: n('evaluate-built') },
+      { label: 'Chartership log', count: n('chartership-log') },
+      { label: 'CPD', count: n('cpd-friday') },
+    ].filter((x) => x.count > 0),
+  }
 }
 
 export function performAction(state: GameState, actionId: string): GameState {
@@ -307,43 +514,70 @@ export function performAction(state: GameState, actionId: string): GameState {
     }
   }
 
-  if (effects.milestone && !next.milestonesHit.includes(effects.milestone)) {
-    // site visits need accumulation
-    if (effects.milestone === 'siteVisits') {
-      const count = next.actionsThisReview.filter((a) => a === 'site-visit').length + 1
-      if (count >= 3) {
-        next.milestonesHit.push('siteVisits')
-        pushLog(next, 'Milestone: site visit log is looking real.', 'good')
-      }
-    } else {
-      next.milestonesHit.push(effects.milestone)
-      pushLog(next, `Milestone progress: ${effects.milestone}`, 'good')
-    }
-  }
+  applyMilestoneProgress(next, actionId)
+  applyActionChartership(next, action)
 
   if (action.id === 'learn-revit') next.software.revit = true
   if (effects.revealFeedback) revealFeedback(next)
-  bumpGrid(next, effects.skill, effects.stage)
+  const projectStage = next.projects[0]?.stage ?? 'detailed'
+  gainGridEvidence(next, action, projectStage)
 
-  // Black Box risk if automate without tinkerer's bench / toolsmith / human check habit
+  // Soft-skill outcome flavour on design review / client meeting
+  if (action.id === 'design-review' || action.id === 'client-meeting') {
+    const presenting = next.grid.find((c) => c.skill === 'presenting' && c.stage === projectStage)
+    const tech = next.grid.find((c) => c.skill === 'technical' && c.stage === projectStage)
+    const p = presenting?.revealed ? presenting.level : presenting?.selfRating ?? 0
+    const t = tech?.level ?? 0
+    if (p >= 2 && t >= 2) {
+      applyResource(next.resources, 'reputation', 1, burnout)
+      pushLog(next, `Strong ${action.name}: Presenting ${p} + Technical ${t} at ${projectStage}.`, 'good')
+    } else if (p < 1) {
+      pushLog(
+        next,
+        `${action.name}: content was fine but the room lost the thread (Presenting low at ${projectStage}).`,
+        'warn',
+      )
+    }
+  }
+
+  // Black Box risk if automate without QA habit — rarer; skip if any crisis already in play
+  const hasQaHabit =
+    next.slotted.includes('tinkerers-bench') ||
+    next.slotted.includes('toolsmith') ||
+    next.masteredHabits.includes('tinkerers-bench')
   if (
     action.id === 'automate' &&
-    !next.slotted.includes('tinkerers-bench') &&
-    !next.slotted.includes('toolsmith') &&
-    Math.random() < 0.22 &&
+    !hasQaHabit &&
+    next.crises.length === 0 &&
+    Math.random() < (next.track === 'technician' ? 0.08 : 0.12) &&
     !next.crises.includes('black-box')
   ) {
-    next.crises.push('black-box')
-    pushLog(next, 'Black Box Crisis: unchecked automation output was nearly issued.', 'bad')
+    drawCrisis(next, 'black-box')
   }
 
   next.actionsThisMonth.push(actionId)
   next.actionsThisReview.push(actionId)
-  pushLog(next, `Did: ${action.name}`, 'neutral')
+  const mic = monthInCycle(next)
+  const months = next.actionMonthsThisReview[actionId] ?? []
+  if (!months.includes(mic)) next.actionMonthsThisReview[actionId] = [...months, mic]
+  const uses = next.actionsThisMonth.filter((id) => id === actionId).length
+  if (action.id === 'unutilized') {
+    pushLog(
+      next,
+      `Unutilized ×${uses}: yields −8 Hours, −1 Fee, −1 Wellbeing; Competence/Reputation/Network/Growth unchanged. Delivery path −1 at Review.`,
+      'warn',
+    )
+  } else {
+    pushLog(next, `Did: ${action.name}${uses > 1 ? ` (×${uses} this month)` : ''}`, 'neutral')
+  }
 
-  if (next.resources.wellbeing <= 0 && next.burnoutTurns <= 0) {
-    next.burnoutTurns = 6
-    pushLog(next, 'Burnout. Yields halved for 6 turns. Force a wellbeing recovery.', 'bad')
+  if (next.resources.wellbeing <= next.wellbeingFloor && next.burnoutTurns <= 0) {
+    next.burnoutTurns = 3
+    pushLog(
+      next,
+      `Burnout (Wellbeing ≤ ${next.wellbeingFloor}). Yields halved for 3 months. Ask Up and leave are the relief valves.`,
+      'bad',
+    )
   }
 
   return next
@@ -353,19 +587,57 @@ export function endMonth(state: GameState): GameState {
   const next = clone(state)
   if (next.screen !== 'desk' || next.ended) return state
 
+  // leftover hours are still idle — nudge the player; yields need explicit Unutilized blocks
+  const leftover = next.resources.hours
+  const idleBlocks = next.actionsThisMonth.filter((id) => id === 'unutilized').length
+  if (leftover >= 8) {
+    const suggested = Math.floor(leftover / 8)
+    pushLog(
+      next,
+      `${leftover}h left unspent. Log Unutilized (−8h) ${suggested}× next time — idle yields: −Fee, −Wellbeing now; flat Competence/Reputation/Network/Growth; Delivery path −1 each at Review.`,
+      'warn',
+    )
+  } else if (idleBlocks >= 3) {
+    pushLog(
+      next,
+      `Heavy idle month (${idleBlocks} unutilized blocks). Fee/Wellbeing yields took the hit; Delivery path will too at Review.`,
+      'warn',
+    )
+  }
+
   // passive founding charter CPD if diarised
   if (next.actionsThisMonth.includes('cpd-friday')) {
     applyResource(next.resources, 'growth', 1, next.burnoutTurns > 0)
+  }
+
+  // Tick inbox deadlines
+  for (const item of next.inbox) {
+    if (!item.resolved) item.monthsLeft -= 1
   }
 
   next.monthInGrade += 1
   next.turn += 1
   next.actionsThisMonth = []
   next.resources.hours = 160
+  next.monthStartResources = clone(next.resources)
   if (next.burnoutTurns > 0) next.burnoutTurns -= 1
 
   // wellbeing drift
   if (next.resources.wellbeing > 16) next.resources.wellbeing = 16
+
+  // Advance live project stage slowly with progress
+  const project = next.projects[0]
+  if (project) {
+    const order: StageId[] = ['concept', 'scheme', 'detailed', 'tender', 'construction', 'commissioning']
+    if (project.progress >= 70) {
+      const idx = order.indexOf(project.stage)
+      if (idx >= 0 && idx < order.length - 1 && project.progress >= 85) {
+        project.stage = order[idx + 1]
+        project.progress = 20
+        pushLog(next, `${project.name} moves to ${project.stage}.`, 'good')
+      }
+    }
+  }
 
   const grade = GRADES[next.grade]
   if (grade.baseTimer && next.monthInGrade > grade.baseTimer) {
@@ -388,6 +660,7 @@ export function endMonth(state: GameState): GameState {
     return beginReview(next)
   }
 
+  refreshInbox(next)
   pushLog(next, `Month ${next.turn} begins. 160 hours on the desk.`, 'neutral')
   return next
 }
@@ -447,40 +720,25 @@ function scoreCard(
 function autoRate(state: GameState, cardId: string): Rating {
   const card = CARD_BY_ID[cardId]
   if (!card || card.kind === 'crisis') return 'notShown'
-  const actions = state.actionsThisReview
-  const counts = actions.reduce<Record<string, number>>((acc, id) => {
-    acc[id] = (acc[id] ?? 0) + 1
-    return acc
-  }, {})
-
-  let score = 0
-  if (card.path === 'technical' || card.kind === 'specialism') {
-    score += (counts['calc-package'] ?? 0) + (counts['model-layouts'] ?? 0) + (counts['automate'] ?? 0) + (counts['cpd-friday'] ?? 0)
-  }
-  if (card.path === 'delivery') {
-    score += (counts['drawing-set'] ?? 0) + (counts['timesheets'] ?? 0) + (counts['design-review'] ?? 0)
-  }
-  if (card.path === 'collaboration' || card.kind === 'cross') {
-    score += (counts['work-across'] ?? 0) + (counts['client-meeting'] ?? 0) + (counts['clash-cycle'] ?? 0) + (counts['lunch-learn'] ?? 0)
-  }
-  if (card.path === 'leadership') {
-    score += (counts['ask-mentor'] ?? 0) + (counts['mentor-junior'] ?? 0) + (counts['cpd-friday'] ?? 0)
-  }
-  // specific habits
-  if (card.id === 'seek-the-elders') score += (counts['ask-mentor'] ?? 0) * 2
-  if (card.id === 'open-workshop') score += (counts['work-across'] ?? 0) * 2
-  if (card.id === 'field-notes') score += (counts['site-visit'] ?? 0) * 2
-
-  if (score >= 5) return 'roleModel'
-  if (score >= 3) return 'consistent'
-  if (score >= 1) return 'emerging'
-  return 'notShown'
+  return rateCard(state, cardId, card.path, card.kind)
 }
 
 export function beginReview(state: GameState): GameState {
   const next = clone(state)
-  const ratings: Record<string, Rating> = {}
+  // Resolve overdue inbox
+  for (const item of next.inbox) {
+    if (item.resolved) continue
+    if (item.monthsLeft <= 0) {
+      applyResource(next.resources, 'reputation', -2, next.burnoutTurns > 0)
+      applyResource(next.resources, 'fee', -1, next.burnoutTurns > 0)
+      pushLog(next, `Late interface: deadline missed. Rework risk lands.`, 'bad')
+      item.resolved = true
+    }
+  }
+
+  let ratings: Record<string, Rating> = {}
   for (const id of next.slotted) ratings[id] = autoRate(next, id)
+  ratings = enforceRoleModelCap(next.grade, ratings)
 
   const actionCounts = next.actionsThisReview.reduce<Record<string, number>>((acc, id) => {
     acc[id] = (acc[id] ?? 0) + 1
@@ -528,6 +786,18 @@ export function beginReview(state: GameState): GameState {
     delta.collaboration += Math.min(2, lineage)
   }
 
+  // Commitment path from desk evidence + banked event choices (capped)
+  const rawCommit =
+    commitmentPathDeltaFromActions(actionCounts) + Math.min(2, next.pendingCommitment ?? 0)
+  const commitDelta = Math.min(3, rawCommit)
+  if (commitDelta) {
+    delta.commitment += commitDelta
+    notes.push(
+      `Commitment: +${commitDelta} (desk/events; soft-capped at +3 this Review)`,
+    )
+  }
+  next.pendingCommitment = 0
+
   // neglect
   const crisesDrawn: string[] = []
   const neglectThreshold = next.grade === 'graduate' || next.grade === 'technician' ? 3 : 2
@@ -536,23 +806,40 @@ export function beginReview(state: GameState): GameState {
       next.neglect[p] = 0
       continue
     }
-    if (pathCarded[p] === 0) next.neglect[p] += 1
+    // Graduate/Technician: commitment neglect is softer (threshold +1)
+    const thresh =
+      p === 'commitment' && (next.grade === 'graduate' || next.grade === 'technician')
+        ? neglectThreshold + 1
+        : neglectThreshold
+    const fed =
+      pathCarded[p] > 0 ||
+      (p === 'commitment' && commitDelta > 0)
+    if (!fed) next.neglect[p] += 1
     else next.neglect[p] = 0
 
-    if (next.neglect[p] >= neglectThreshold) {
+    if (next.neglect[p] >= thresh) {
       const crisisId = crisisForPath(next.grade, p)
       if (crisisId === 'drift') {
         delta[p] -= 2
         notes.push(`${p} Drift (−2).`)
         next.neglect[p] = 0
       } else if (crisisId && !next.crises.includes(crisisId)) {
-        next.crises.push(crisisId)
-        crisesDrawn.push(crisisId)
-        notes.push(`Crisis drawn: ${CARD_BY_ID[crisisId]?.name}`)
+        if (drawCrisis(next, crisisId)) {
+          crisesDrawn.push(crisisId)
+          notes.push(
+            `Crisis drawn: ${CARD_BY_ID[crisisId]?.name}. Slot its clearer habit on Cards before promotion.`,
+          )
+        }
         next.neglect[p] = 0
       }
     }
   }
+
+  // DAP revisit note
+  next.actionPlan.lastReviewedTurn = next.turn
+  notes.push(
+    `Development Action Plan revisited: short “${next.actionPlan.short.slice(0, 48)}…”`,
+  )
 
   // morale check
   let moralePenalty = false
@@ -568,22 +855,37 @@ export function beginReview(state: GameState): GameState {
     if (next.milestonesHit.includes(m.id)) delta[m.path] += 1
   }
 
+  // Unutilized time: each −8h idle block this cycle costs −1 Delivery path
+  // (no billable output). Yield hits (−1 Fee, −1 Wellbeing; other yields flat) already applied on select.
+  const idleBlocks = actionCounts['unutilized'] ?? 0
+  if (idleBlocks > 0) {
+    delta.delivery -= idleBlocks
+    notes.push(
+      `Unutilized ×${idleBlocks}: yields already logged (−Fee/−Wellbeing per block; Competence/Reputation/Network/Growth earned nothing). Delivery path −${idleBlocks} this Review.`,
+    )
+  }
+
   // round down / apply
   for (const p of PATHS) {
     delta[p] = Math.floor(delta[p])
     next.paths[p] += delta[p]
   }
 
-  // growth banking helpers
-  growthGain += Math.min(3, actionCounts['cpd-friday'] ?? 0) // CPD clause up to 3
+  // Growth: tighter caps so a grade takes several Reviews
+  const cpdBlocks =
+    (actionCounts['cpd-friday'] ?? 0) + (actionCounts['chartership-log'] ?? 0)
+  growthGain += Math.min(2, cpdBlocks)
+  let pathGrowth = 0
   for (const p of PATHS) {
-    if (next.paths[p] >= cfg.golden) growthGain += 2
-    else if (next.paths[p] >= cfg.m2) growthGain += 1
+    if (next.paths[p] >= cfg.golden) pathGrowth += 1
+    else if (next.paths[p] >= cfg.m2) pathGrowth += 1
   }
+  growthGain += Math.min(2, pathGrowth)
+  growthGain = Math.min(5, Math.max(0, Math.floor(growthGain)))
   next.resources.growth += growthGain
   next.growthBanked = next.resources.growth
 
-  const gatePass = checkGate(next.paths, cfg, next.specialistWaive)
+  const gatePass = checkGate(next.paths, cfg, next.specialistWaive, next.grade)
   if (gatePass) next.consecutiveGate += 1
   else next.consecutiveGate = 0
 
@@ -601,20 +903,32 @@ export function beginReview(state: GameState): GameState {
   next.lastReview = snapshot
   next.reviewsDone += 1
   next.actionsThisReview = []
+  next.actionMonthsThisReview = {}
+  next.positiveFeedbackThisReview = false
   next.screen = 'review'
   pushLog(next, `Six-monthly review complete. Gate ${gatePass ? 'passed' : 'missed'}.`, gatePass ? 'good' : 'warn')
   return next
 }
 
 function crisisForPath(grade: GradeId, path: PathId): string {
+  if (path === 'commitment') return 'corner-cut'
   const table: Record<string, Partial<Record<PathId, string>>> = {
-    graduate: { collaboration: 'island-mentality', leadership: 'silent-struggle' },
-    engineer: { delivery: 'late-alarm', technical: 'my-way-only' },
-    senior: { delivery: 'isolated-verdict', leadership: 'problem-spotter' },
-    associate: { delivery: 'unclaimed-helm', leadership: 'command-without-trust' },
-    technician: { collaboration: 'guesswork-geometry' },
-    seniorTechnician: { delivery: 'revision-drift' },
-    bimLead: { leadership: 'standards-for-their-own-sake' },
+    graduate: { collaboration: 'island-mentality', leadership: 'silent-struggle', commitment: 'corner-cut' },
+    engineer: {
+      delivery: 'late-alarm',
+      technical: 'my-way-only',
+      collaboration: 'island-mentality',
+      commitment: 'corner-cut',
+    },
+    senior: { delivery: 'isolated-verdict', leadership: 'problem-spotter', commitment: 'corner-cut' },
+    associate: { delivery: 'unclaimed-helm', leadership: 'command-without-trust', commitment: 'corner-cut' },
+    technician: {
+      delivery: 'issue-day',
+      collaboration: 'guesswork-geometry',
+      commitment: 'corner-cut',
+    },
+    seniorTechnician: { delivery: 'revision-drift', commitment: 'corner-cut' },
+    bimLead: { leadership: 'standards-for-their-own-sake', commitment: 'corner-cut' },
   }
   return table[grade]?.[path] ?? 'drift'
 }
@@ -623,10 +937,13 @@ function checkGate(
   paths: PathScores,
   cfg: ReturnType<typeof gateConfig>,
   waive: PathId | null,
+  grade: GradeId,
 ): boolean {
   let strong = 0
   for (const p of PATHS) {
     if (waive === p) continue
+    // Commitment at M1 required from Engineer grade onward (grades.md)
+    if (p === 'commitment' && !commitmentRequired(grade)) continue
     if (paths[p] < cfg.m1) return false
     if (paths[p] >= cfg.m2) strong += 1
   }
@@ -670,49 +987,76 @@ export function toggleCard(state: GameState, cardId: string): GameState {
   return next
 }
 
+function drawCrisis(state: GameState, crisisId: string): boolean {
+  // Graduate/Technician: at most one crisis at a time
+  if (
+    (state.grade === 'graduate' || state.grade === 'technician') &&
+    state.crises.length >= 1
+  ) {
+    return false
+  }
+  if (state.crises.includes(crisisId)) return false
+  state.crises.push(crisisId)
+  // Auto-offer clearer habit into loadout when possible
+  const clearer = CARD_BY_ID[crisisId]?.clearedBy
+  if (clearer && !state.slotted.includes(clearer)) {
+    const max = slotCount(state)
+    const nonCrisis = state.slotted.filter((id) => !state.crises.includes(id))
+    if (state.slotted.length < max) {
+      state.slotted.push(clearer)
+    } else if (nonCrisis.length) {
+      const drop = nonCrisis[nonCrisis.length - 1]!
+      state.slotted = state.slotted.filter((id) => id !== drop)
+      state.slotted.push(clearer)
+    }
+    pushLog(
+      state,
+      `Cards: slotted “${CARD_BY_ID[clearer]?.name ?? clearer}” to clear ${CARD_BY_ID[crisisId]?.name}. Keep it Consistent next Review.`,
+      'warn',
+    )
+  }
+  return true
+}
+
 export function finishReview(state: GameState): GameState {
   const next = clone(state)
-  const cfg = gateConfig(next.grade)
-  const ready =
-    next.consecutiveGate >= 2 &&
-    next.growthBanked >= cfg.growthNeed &&
-    next.crises.length === 0 &&
-    !(next.lastReview?.moralePenalty)
 
-  // clear crises if counter habit was slotted consistently
+  // Clear crises if clearer habit was slotted Emerging+ (was Consistent-only — softlock risk)
   if (next.lastReview) {
     for (const crisisId of [...next.crises]) {
       const crisis = CARD_BY_ID[crisisId]
       const clearer = crisis?.clearedBy
+      const rating = clearer ? next.lastReview.ratings[clearer] : undefined
       if (
         clearer &&
         next.slotted.includes(clearer) &&
-        (next.lastReview.ratings[clearer] === 'consistent' ||
-          next.lastReview.ratings[clearer] === 'roleModel')
+        (rating === 'emerging' || rating === 'consistent' || rating === 'roleModel')
       ) {
         next.crises = next.crises.filter((id) => id !== crisisId)
-        next.slotted = next.slotted.filter((id) => id !== crisisId)
-        pushLog(next, `Cleared crisis: ${crisis.name}`, 'good')
+        pushLog(next, `Cleared crisis: ${crisis?.name} (via ${CARD_BY_ID[clearer]?.name}).`, 'good')
       }
     }
   }
 
-  if (ready) {
+  if (canPromoteNormal(next)) {
     next.screen = 'promotion'
     pushLog(next, 'Promotion ready. Mentor review unlocked.', 'good')
     return next
   }
 
-  // early promotion via milestones: 3 of 5
-  const hits = GRADES[next.grade].milestones.filter((m) => next.milestonesHit.includes(m.id)).length
-  if (hits >= 3 && next.consecutiveGate >= 1 && next.crises.length === 0 && next.reviewsDone >= 2) {
-    next.screen = 'promotion'
-    pushLog(next, 'Milestone route: early promotion review.', 'good')
-    return next
-  }
-
+  // Early route is opt-in from Self (Request early promotion) — not auto after Review
   next.screen = 'cards'
-  pushLog(next, 'Set your loadout for the next six months.', 'neutral')
+  if (next.crises.length) {
+    const hints = next.crises
+      .map((id) => {
+        const c = CARD_BY_ID[id]
+        return c?.clearedBy ? `${c.name} ← ${CARD_BY_ID[c.clearedBy]?.name}` : c?.name
+      })
+      .join('; ')
+    pushLog(next, `Crisis lock — clear before promotion: ${hints}`, 'warn')
+  } else {
+    pushLog(next, 'Set your loadout for the next six months.', 'neutral')
+  }
   return next
 }
 
@@ -728,6 +1072,8 @@ export function promote(state: GameState, keepHabitId?: string): GameState {
       leadership: 'You lead a multi-discipline wonder. Practice leadership beckons.',
       delivery: 'Client account growth puts commercial leadership in reach.',
       collaboration: 'Your talks and networks start shaping guidance beyond the firm.',
+      commitment:
+        'Chartered practice — you mentor others through Professional Review and feed the Influence legacy.',
     }
     // map collaboration→Influence legacy, delivery→Commercial
     next.ended = {
@@ -755,10 +1101,18 @@ export function promote(state: GameState, keepHabitId?: string): GameState {
   next.neglect = emptyPaths()
   next.consecutiveGate = 0
   next.milestonesHit = []
+  next.milestoneProgress = {}
   next.crises = []
+  // Soft-reset Growth — carry ≤30% and always below the next grade's need
+  const nextNeed = growthNeedFor(nextId)
+  const carried = Math.min(Math.floor(next.growthBanked * 0.3), Math.max(0, nextNeed - 1))
+  next.growthBanked = carried
+  next.resources.growth = carried
   next.celebrationSlots = 1
   next.celebrationExpires = next.turn + 6
   next.projects = demoProjects(nextId)
+  next.inboxUsed = []
+  refreshInbox(next)
 
   // unlock next specialism if any
   const nextSpecs = specialismsFor(nextId, next.discipline, next.unlockedSpecialisms)
@@ -804,18 +1158,123 @@ export function resolveEventChoice(state: GameState, choiceId: string): GameStat
   if (!ev) {
     next.screen = 'desk'
     next.pendingEvent = null
+    next.pendingClaim = null
+    return next
+  }
+  // If event has UK-SPEC elements, pause for "I / contributed / we" claim
+  if (ev.elements?.length) {
+    next.pendingClaim = { eventId: ev.id, choiceId }
+    next.screen = 'event'
+    return next
+  }
+  return applyEventChoice(next, ev.id, choiceId, 'contributed')
+}
+
+export function resolveEventClaim(state: GameState, claim: ClaimRole): GameState {
+  const next = clone(state)
+  if (!next.pendingClaim) {
+    next.screen = 'desk'
+    return next
+  }
+  const { eventId, choiceId } = next.pendingClaim
+  return applyEventChoice(next, eventId, choiceId, claim)
+}
+
+function applyEventChoice(
+  state: GameState,
+  eventId: string,
+  choiceId: string,
+  claim: ClaimRole,
+): GameState {
+  const next = state
+  const ev = EVENTS.find((e) => e.id === eventId)
+  if (!ev) {
+    next.screen = 'desk'
+    next.pendingEvent = null
+    next.pendingClaim = null
     return next
   }
   const choice = ev.choices.find((c) => c.id === choiceId) ?? ev.choices[0]
   const burnout = next.burnoutTurns > 0
   for (const [k, v] of Object.entries(choice.effects)) {
     if (k === 'hours') next.resources.hours = Math.max(0, next.resources.hours + (v as number))
-    else if (k in next.resources)
+    else if (k === 'commitmentPath') {
+      const delta = Math.max(-1, Math.min(2, v as number))
+      next.pendingCommitment = Math.min(3, Math.max(0, (next.pendingCommitment ?? 0) + delta))
+    } else if (k in next.resources)
       applyResource(next.resources, k as keyof Resources, v as number, burnout)
+  }
+  if (choice.drawsCornerCut) {
+    if (drawCrisis(next, 'corner-cut')) {
+      pushLog(next, 'Corner Cut Crisis: professional commitment neglected.', 'bad')
+    }
+  }
+  if (ev.elements?.length) {
+    const effectiveClaim = choice.drawsCornerCut ? 'we' : claim
+    logEvidence(next, {
+      source: 'event',
+      title: ev.title,
+      elements: ev.elements,
+      claim: effectiveClaim,
+      note: choice.result,
+    })
+    if (ev.elements.some((e) => e.startsWith('E')) && effectiveClaim !== 'we') {
+      addCpdHours(next, 2, false)
+    }
   }
   pushLog(next, `Event: ${ev.title} — ${choice.result}`, 'neutral')
   next.pendingEvent = null
+  next.pendingClaim = null
   next.screen = 'desk'
+  return next
+}
+
+export function setCharterBody(
+  state: GameState,
+  body: GameState['charterBody'],
+): GameState {
+  const next = clone(state)
+  next.charterBody = body
+  pushLog(
+    next,
+    `Chartership body: ${body === 'engineersIreland' ? 'Engineers Ireland' : 'CIBSE / IET (UK-SPEC)'}.`,
+    'good',
+  )
+  return next
+}
+
+export function updateActionPlan(
+  state: GameState,
+  plan: Partial<GameState['actionPlan']>,
+): GameState {
+  const next = clone(state)
+  next.actionPlan = { ...next.actionPlan, ...plan, lastReviewedTurn: next.turn }
+  return next
+}
+
+export function attemptCharterReview(state: GameState): GameState {
+  const next = clone(state)
+  if (!canAttemptProfessionalReview(next)) {
+    pushLog(
+      next,
+      'Professional Review locked: every UK-SPEC element needs at least “demonstrated” evidence.',
+      'warn',
+    )
+    return next
+  }
+  const result = runProfessionalReview(next)
+  next.screen = 'charterReview'
+  pushLog(
+    next,
+    result.passed ? 'Professional Review: pass.' : 'Professional Review: deferred.',
+    result.passed ? 'good' : 'warn',
+  )
+  return next
+}
+
+export function finishCharterReview(state: GameState): GameState {
+  const next = clone(state)
+  next.screen = 'self'
   return next
 }
 
@@ -834,17 +1293,113 @@ export function saveGame(state: GameState) {
 
 export function loadGame(): GameState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw =
+      localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('career-civics-save-v2')
     if (!raw) return null
-    return JSON.parse(raw) as GameState
+    const state = JSON.parse(raw) as GameState
+    if (!state.monthStartResources) state.monthStartResources = clone(state.resources)
+    if (!state.milestoneProgress) state.milestoneProgress = {}
+    if (!state.actionMonthsThisReview) state.actionMonthsThisReview = {}
+    if (!state.inbox) state.inbox = []
+    if (!state.inboxUsed) state.inboxUsed = []
+    if (!state.ties) state.ties = defaultTies(state.discipline)
+    if (!state.feedbackLog) state.feedbackLog = []
+    if (state.positiveFeedbackThisReview == null) state.positiveFeedbackThisReview = false
+    if (!state.wellbeingFloor) state.wellbeingFloor = 4
+    if (state.paths && state.paths.commitment == null) state.paths.commitment = 0
+    if (state.neglect && state.neglect.commitment == null) state.neglect.commitment = 0
+    if (!state.charterBody) state.charterBody = 'cibse'
+    if (!state.sponsor) state.sponsor = defaultSponsor(state.discipline)
+    if (!state.actionPlan) state.actionPlan = defaultActionPlan(state.grade)
+    if (!state.elementStrength) state.elementStrength = emptyEvidenceMap()
+    if (!state.charterLog) state.charterLog = []
+    if (!state.cpd) state.cpd = { plannedHours: 0, unplannedHours: 0, yearStartTurn: 1 }
+    if (!state.professionalReview) {
+      state.professionalReview = {
+        attempted: false,
+        passed: false,
+        deferredElements: [],
+        notes: [],
+      }
+    }
+    if (state.pendingClaim === undefined) state.pendingClaim = null
+    if (state.pendingCommitment == null) state.pendingCommitment = 0
+    ensureChartership(state)
+    for (const cell of state.grid ?? []) {
+      if (cell.evidence == null) cell.evidence = cell.level >= 1 ? 2 : 0
+      if (cell.confirmed == null) cell.confirmed = cell.revealed && cell.level >= 3
+    }
+    return state
   } catch {
     return null
   }
 }
 
+export function resolveInbox(
+  state: GameState,
+  defId: string,
+  choiceId: string,
+): GameState {
+  const next = clone(state)
+  const item = next.inbox.find((i) => i.defId === defId && !i.resolved)
+  const def = INBOX_POOL.find((d) => d.id === defId)
+  if (!item || !def || next.screen !== 'desk') return state
+  const choice = def.choices.find((c) => c.id === choiceId) ?? def.choices[0]
+  const hours = choice.hours ?? 0
+  if (hours > next.resources.hours) {
+    pushLog(next, 'Not enough hours for that inbox choice.', 'warn')
+    return next
+  }
+  next.resources.hours -= hours
+  const burnout = next.burnoutTurns > 0
+  const fx = choice.effects ?? {}
+  for (const key of ['competence', 'reputation', 'network', 'fee', 'wellbeing', 'growth'] as const) {
+    if (fx[key]) applyResource(next.resources, key, fx[key]!, burnout)
+  }
+  if (fx.projectProgress && next.projects[0]) {
+    next.projects[0].progress = Math.min(100, next.projects[0].progress + fx.projectProgress)
+  }
+  if (fx.tieDelta) {
+    const tie = next.ties.find(
+      (t) => t.role.toLowerCase().includes(String(def.from)) || t.id.includes(String(def.from).slice(0, 3)),
+    )
+    if (tie) tie.strength = Math.min(3, Math.max(0, tie.strength + fx.tieDelta))
+  }
+  if (choice.risk === 'rework' && Math.random() < 0.35) {
+    applyResource(next.resources, 'reputation', -1, burnout)
+    if (next.projects[0]) next.projects[0].clashes += 1
+    pushLog(next, `Rework risk lands: ${def.ifLate}`, 'bad')
+  }
+  item.resolved = true
+  if (!next.inboxUsed.includes(defId)) next.inboxUsed.push(defId)
+  pushLog(next, `Inbox: ${def.title} — ${choice.result}`, 'neutral')
+  if (next.resources.wellbeing <= next.wellbeingFloor && next.burnoutTurns <= 0) {
+    next.burnoutTurns = 3
+    pushLog(next, `Burnout (Wellbeing ≤ ${next.wellbeingFloor}).`, 'bad')
+  }
+  return next
+}
+
+/** Re-export Self helpers for screens. */
+export {
+  topGaps,
+  promotionReady,
+  promotionBlockers,
+  crisisClearHint,
+  growthNeedFor,
+  monthInCycle,
+} from './progress'
+export { milestonesFor } from '../data/milestones'
+export { expectedLevel, nextGradeId } from '../data/expectations'
+export {
+  canAttemptProfessionalReview,
+  cpdProgress,
+} from './chartership'
+
 export function clearSave() {
   try {
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem('career-civics-save-v2')
   } catch {
     /* ignore */
   }
