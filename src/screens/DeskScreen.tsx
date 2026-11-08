@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ActionYields } from '../components/ActionYields'
 import { CARD_BY_ID } from '../data/cards'
+import { deskifyCardText as deskify } from '../data/deskNames'
 import { GRADES } from '../data/grades'
 import type { GameState, Resources } from '../data/types'
 import { FoundingCharter } from '../components/FoundingCharter'
 import { PathExplain } from '../components/PathExplain'
 import { YieldStrip } from '../components/YieldStrip'
+import { INBOX_POOL } from '../data/inbox'
 import {
   actionYieldPreview,
   canAfford,
@@ -19,11 +21,13 @@ import {
 export function DeskScreen({
   state,
   onAction,
+  onInbox,
   onEndMonth,
   onDismissTip,
 }: {
   state: GameState
   onAction: (id: string) => void
+  onInbox: (defId: string, choiceId: string) => void
   onEndMonth: () => void
   onDismissTip: () => void
 }) {
@@ -43,15 +47,13 @@ export function DeskScreen({
         burnout={state.burnoutTurns > 0}
         monthPlan={monthPlan}
         hoverPreview={hoverPreview}
+        wellbeingFloor={state.wellbeingFloor}
       />
 
       {!state.tipSeen && (
         <div className="tip" style={{ color: 'var(--paper)' }}>
-          <strong>How a month works:</strong> every action is one −8h block — press again to stack
-          more (e.g. five calc blocks ≈ a full package). The top strip shows banked +/− for the
-          month under each yield. Overtime means you are overloaded: log it, then Ask Up for
-          support. Leftover hours? Log <em>Unutilized time</em> (−8h): Fee and Wellbeing yields
-          fall; Competence, Reputation, Network, and Growth earn nothing.
+          <strong>How a month works:</strong> −8h blocks stack. Clear the Inbox before deadlines.
+          Wellbeing ≤ {state.wellbeingFloor} triggers Burnout. Tap ? on paths for M1/M2 help.
           <div style={{ marginTop: '0.6rem' }}>
             <button className="btn btn-primary" onClick={onDismissTip}>
               Got it
@@ -73,6 +75,57 @@ export function DeskScreen({
               {state.resources.hours}h left
             </div>
           </div>
+
+          {!!state.inbox.filter((i) => !i.resolved).length && (
+            <div className="inbox-block">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow" style={{ color: 'var(--signal)' }}>
+                    Inbox · {state.inbox.filter((i) => !i.resolved).length} to decide
+                  </p>
+                  <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
+                    Each choice costs hours or a relationship. Late cards cause rework.
+                  </p>
+                </div>
+              </div>
+              <div className="stack">
+                {state.inbox
+                  .filter((i) => !i.resolved)
+                  .map((item) => {
+                    const def = INBOX_POOL.find((d) => d.id === item.defId)
+                    if (!def) return null
+                    return (
+                      <div className="inbox-card" key={item.defId}>
+                        <div className="inbox-title">
+                          {def.title}{' '}
+                          <span className="muted">
+                            · {item.monthsLeft} mo left · from {def.from}
+                          </span>
+                        </div>
+                        <p className="action-blurb">{def.body}</p>
+                        <p className="muted" style={{ fontSize: '0.8rem' }}>
+                          If late: {def.ifLate}
+                        </p>
+                        <div className="inbox-choices">
+                          {def.choices.map((c) => (
+                            <button
+                              key={c.id}
+                              className="btn btn-ghost"
+                              style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}
+                              type="button"
+                              disabled={(c.hours ?? 0) > state.resources.hours}
+                              onClick={() => onInbox(def.id, c.id)}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
 
           <div className="stack">
             {actions.map((action, i) => {
@@ -159,6 +212,26 @@ export function DeskScreen({
           </div>
 
           <div className="panel" style={{ padding: '1.1rem' }}>
+            <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+              Your network
+            </p>
+            <div className="stack">
+              {state.ties.map((t) => (
+                <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <span>
+                    <strong>{t.name}</strong> · {t.role}
+                  </span>
+                  <span className="tie-dots" aria-label={`Tie ${t.strength} of 3`}>
+                    {[0, 1, 2].map((i) => (
+                      <i key={i} className={i < t.strength ? 'on' : ''} />
+                    ))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel" style={{ padding: '1.1rem' }}>
             <div className="section-head">
               <div>
                 <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
@@ -173,7 +246,7 @@ export function DeskScreen({
                 return (
                   <div key={id} style={{ fontSize: '0.92rem' }}>
                     <strong>{card?.name ?? id}</strong>
-                    <div className="muted">{card?.effect}</div>
+                    <div className="muted">{card ? deskify(card.effect) : ''}</div>
                   </div>
                 )
               })}

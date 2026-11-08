@@ -82,15 +82,56 @@ export function PromotionScreen({
           </div>
         )}
 
-        <button
-          className="btn btn-ink"
-          onClick={() => {
-            if (next) onPromote(keep)
-            else onPromote()
-          }}
-        >
-          {next ? `Promote to ${next.name}` : 'Complete Legacy Path'}
-        </button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '1rem' }}>
+          <button
+            className="btn btn-ink"
+            onClick={() => {
+              if (next) onPromote(keep)
+              else onPromote()
+            }}
+          >
+            {next ? `Promote to ${next.name}` : 'Complete Legacy Path'}
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}
+            onClick={() => {
+              window.alert(
+                'Pivot: stay on your track for now, or note a future move (Electrical→ICT, Engineer→PM, Technician→Engineer). Full pivot routes unlock in a later patch — your mentor has logged the interest.',
+              )
+              if (next) onPromote(keep)
+              else onPromote()
+            }}
+          >
+            Pivot discipline…
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}
+            onClick={() => {
+              const blob = new Blob(
+                [
+                  `Career Civics debrief — ${character?.name ?? ''} · ${grade.name}\n`,
+                  `Paths: ${JSON.stringify(state.paths)}\n`,
+                  `Milestones: ${state.milestonesHit.join(', ') || 'none'}\n`,
+                  `Growth banked: ${state.growthBanked}\n`,
+                  `Feedback:\n${state.feedbackLog.map((f) => `M${f.turn}: ${f.text}`).join('\n') || 'none'}\n`,
+                ],
+                { type: 'text/plain' },
+              )
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `career-civics-debrief-${character?.id ?? 'player'}.txt`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+          >
+            Export debrief card
+          </button>
+        </div>
       </div>
     </section>
   )

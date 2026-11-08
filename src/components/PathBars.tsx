@@ -18,31 +18,18 @@ export function PathBars({
 
   return (
     <div className="path-bars">
-      <div className="gate-glossary" role="note">
+      <details className="gate-glossary">
+        <summary>
+          What good looks like · M1 ≥{cfg.m1} · M2 ≥{cfg.m2} (≥{cfg.gateStrong}) · Golden ≥
+          {cfg.golden}
+        </summary>
         <p>
-          <strong>What M1 / M2 / Golden mean</strong> — path points from six-monthly Reviews. They are
-          not monthly yields.
+          Path points land at six-monthly Reviews (not when you click desk actions).{' '}
+          <strong>M1</strong> = minimum on every path to pass the gate. <strong>M2</strong> = strong
+          path (need ≥{cfg.gateStrong}). <strong>Golden</strong> = exceptional (Habit carry on
+          promotion).
         </p>
-        <ul>
-          <li>
-            <strong>M1 (Milestone 1)</strong> — minimum bar for this grade ({cfg.m1}+). You need{' '}
-            <em>every</em> path at M1 to pass the promotion gate.
-          </li>
-          <li>
-            <strong>M2 (Milestone 2)</strong> — strong path ({cfg.m2}+). Gate also needs at least{' '}
-            {cfg.gateStrong} path(s) at M2.
-          </li>
-          <li>
-            <strong>Golden</strong> — exceptional path ({cfg.golden}+). Unlocks Golden Age carry (keep
-            a matching Habit free on promotion).
-          </li>
-        </ul>
-      </div>
-
-      <div className="path-grade-target" aria-label="Good for this grade">
-        This grade — good looks like M1 ≥{cfg.m1} on every path, M2 ≥{cfg.m2} on ≥{cfg.gateStrong},
-        Golden ≥{cfg.golden}. Markers on each bar show those thresholds.
-      </div>
+      </details>
 
       {PATHS.map((p) => {
         const v = paths[p]

@@ -28,69 +28,31 @@ export function PathExplain({ state }: { state: GameState }) {
       <PathBars paths={state.paths} grade={state.grade} compact />
 
       <div className="path-explain-body">
-        <div className="score-recipe" role="note">
-          <strong>How the 1–{cfg.golden} path numbers work (they are not arbitrary)</strong>
+        <details className="score-recipe">
+          <summary>How path scores work (Review recipe)</summary>
           <p>
-            The big number on each bar (e.g. <code>3 / {cfg.m2}</code>) is your{' '}
-            <strong>path total this grade</strong> over the M2 target. Points are added only at each
-            six-month <strong>Review</strong> — desk clicks move yields now; paths update later.
-          </p>
-          <ol>
-            <li>
-              <strong>Base:</strong> every path gets +{cfg.base} just for surviving the cycle.
-            </li>
-            <li>
-              <strong>Slotted cards:</strong> each Habit / Specialism scores into its path. Mentors
-              rate the card from your cycle evidence (Not shown → Emerging → Consistent → Role model).
-              Rating multiplies the card’s yields (0× / 0.5× / 1× / 1.5×).
-            </li>
-            <li>
-              <strong>Milestones:</strong> +1 to the matching path when you have hit that grade
-              milestone (calc package, drawing set, etc.).
-            </li>
-            <li>
-              <strong>Idle drag:</strong> each Unutilized (−8h) block this cycle −1 Delivery.
-            </li>
-            <li>
-              <strong>Crises / morale:</strong> slotted crises and failed morale checks can subtract.
-            </li>
-          </ol>
-          <p>
-            Those Review deltas <em>stack</em> across the grade. M1 ({cfg.m1}), M2 ({cfg.m2}), and
-            Golden ({cfg.golden}) are thresholds on that running total — not a separate 1–5 star
-            rating.
+            Bar numbers are <strong>path totals this grade</strong> (e.g. 3 / {cfg.m2} = current / M2).
+            Points add only at Review: base +{cfg.base}, slotted cards × mentor rating, milestones,
+            −1 Delivery per Unutilized block, crisis penalties.
           </p>
           {last && (
             <p className="last-review-delta">
-              Last Review deltas:{' '}
+              Last Review:{' '}
               {(Object.keys(PATH_HOW) as PathId[])
-                .map((p) => {
-                  const d = last.pathDelta[p]
-                  const sign = d > 0 ? `+${d}` : `${d}`
-                  return `${PATH_LABELS[p]} ${sign}`
-                })
+                .map((p) => `${PATH_LABELS[p]} ${last.pathDelta[p] >= 0 ? '+' : ''}${last.pathDelta[p]}`)
                 .join(' · ')}
               {last.gatePass ? ' · gate passed' : ' · gate missed'}
             </p>
           )}
-        </div>
+        </details>
 
-        <p className="muted" style={{ fontSize: '0.85rem' }}>
-          Gate this grade: every path ≥ M1 ({cfg.m1}), and at least {cfg.gateStrong} path(s) ≥ M2 (
-          {cfg.m2}). Golden ({cfg.golden}) is optional excellence — keep a matching Habit free on
-          promotion.
-        </p>
-
-        <div className="cycle-glossary" role="note">
-          <strong>What “This cycle: Work Across ×7 …” means</strong>
+        <details className="cycle-glossary">
+          <summary>What “This cycle: Work Across ×N” means (month {monthsIntoCycle}/6)</summary>
           <p>
-            A <em>cycle</em> is the six months between Reviews (you are in month {monthsIntoCycle} of
-            6). Each line counts how many −8h blocks of that action you have taken since the last
-            Review. Mentors use those counts to rate your slotted Habits/Specialisms (e.g. more Work
-            Across → stronger Collaboration evidence). It is a tally of evidence, not path points yet
-            — points land at Review via the recipe above.
+            Counts of −8h blocks since the last Review. Mentors use them to rate slotted cards —
+            evidence tallies, not live path points.
           </p>
-        </div>
+        </details>
 
         <ul className="path-how-list">
           {(Object.keys(PATH_HOW) as PathId[]).map((p) => {

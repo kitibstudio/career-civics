@@ -71,12 +71,19 @@ export default function App() {
         <DeskScreen
           state={state}
           onAction={(id) => dispatch({ type: 'act', actionId: id })}
+          onInbox={(defId, choiceId) => dispatch({ type: 'inbox', defId, choiceId })}
           onEndMonth={() => dispatch({ type: 'endMonth' })}
           onDismissTip={() => dispatch({ type: 'tipSeen' })}
         />
       )}
 
-      {state && screen === 'self' && <SelfScreen state={state} />}
+      {state && screen === 'self' && (
+        <SelfScreen
+          state={state}
+          onAskFeedback={() => dispatch({ type: 'act', actionId: 'ask-feedback' })}
+          onPlanGaps={() => dispatch({ type: 'screen', screen: 'desk' })}
+        />
+      )}
 
       {state && screen === 'cards' && (
         <CardsScreen

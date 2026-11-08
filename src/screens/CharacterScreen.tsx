@@ -68,9 +68,17 @@ export function CharacterScreen({
                 {character.skills.commercial}
               </div>
             </div>
+            <div>
+              <strong>Career map</strong>
+              <div className="muted" style={{ fontSize: '0.88rem' }}>
+                {character.track === 'technician'
+                  ? 'Technician → Senior Technician → BIM Lead → Lead Coordinator (can pivot toward engineer later).'
+                  : 'Graduate → Engineer → Senior → Associate. Pivots (discipline / PM) appear at promotion.'}
+              </div>
+            </div>
           </div>
           <button className="btn btn-ink" onClick={() => onPick(character.id)}>
-            Start as {character.name}
+            Begin career
           </button>
         </div>
       </div>

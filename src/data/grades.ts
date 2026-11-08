@@ -269,14 +269,15 @@ export const GRADES: Record<string, GradeDef> = {
 }
 
 export const MILESTONES_FOR_GATE = {
-  graduate: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 16 },
-  technician: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 16 },
-  engineer: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 24 },
-  seniorTechnician: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 24 },
-  senior: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 30 },
-  bimLead: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 30 },
-  associate: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 40 },
-  leadCoordinator: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 40 },
+  // Growth: steady CPD (~+3/cycle) needs 3–4 reviews for Graduate
+  graduate: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 20 },
+  technician: { base: 1, m1: 1, m2: 3, golden: 5, gateStrong: 1, growthNeed: 20 },
+  engineer: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 28 },
+  seniorTechnician: { base: 1, m1: 2, m2: 4, golden: 7, gateStrong: 1, growthNeed: 28 },
+  senior: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 36 },
+  bimLead: { base: 2, m1: 2, m2: 5, golden: 9, gateStrong: 2, growthNeed: 36 },
+  associate: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 48 },
+  leadCoordinator: { base: 2, m1: 3, m2: 6, golden: 10, gateStrong: 2, growthNeed: 48 },
 } as const
 
 export function gateConfig(grade: string) {

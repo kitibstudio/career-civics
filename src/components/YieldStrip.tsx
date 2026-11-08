@@ -21,6 +21,7 @@ export function YieldStrip({
   burnout,
   monthPlan,
   hoverPreview,
+  wellbeingFloor = 4,
 }: {
   resources: Resources
   burnout?: boolean
@@ -28,6 +29,7 @@ export function YieldStrip({
   monthPlan?: Partial<Record<keyof Resources, number>> | null
   /** Hovered next-action deltas (Civ-style before commit). */
   hoverPreview?: Partial<Record<keyof Resources, number>> | null
+  wellbeingFloor?: number
 }) {
   return (
     <div className="yield-strip-wrap">
@@ -67,16 +69,14 @@ export function YieldStrip({
       </div>
       <div className="yield-strip-legend" role="note">
         <span>
-          <strong>Big number</strong> = career total
+          <strong>Big number</strong> = career total · coloured ± = this month ·{' '}
+          <strong className="leg-next">next ±</strong> = hover preview
         </span>
         <span>
-          <strong className="leg-up">+6</strong> = banked this month (since the month started)
+          Wellbeing floor {wellbeingFloor}
+          {resources.wellbeing <= wellbeingFloor ? ' · at risk' : ''}
+          {burnout ? ' · Burnout: yields halved' : ''}
         </span>
-        <span>
-          <strong className="leg-next">next +3</strong> = preview if you take the action you are
-          hovering / focusing
-        </span>
-        {burnout ? <span>* Burnout: most yields halved</span> : null}
       </div>
     </div>
   )

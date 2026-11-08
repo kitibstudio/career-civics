@@ -942,3 +942,241 @@ a {
     transition: none !important;
   }
 }
+
+/* —— Self mono (feedback mockup) —— */
+.self-mono {
+  color: #111;
+}
+.self-panel {
+  background: #fff;
+  border: 1px solid #111;
+  border-radius: 4px;
+  padding: 1.25rem;
+}
+.self-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+  color: #555;
+}
+.self-title {
+  font-family: var(--font-body);
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin: 0.2rem 0;
+}
+.self-sub {
+  color: #555;
+  font-size: 0.88rem;
+  margin: 0.25rem 0;
+}
+.self-ready {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+  padding: 0.85rem 0;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+}
+.self-ready-status {
+  font-size: 1.5rem;
+  margin: 0 0 0.35rem;
+  font-weight: 800;
+}
+.self-ready-stats {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+.self-btn {
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #111;
+  background: #f3f3f3;
+  color: #111;
+  font-weight: 600;
+  border-radius: 2px;
+}
+.self-btn:disabled {
+  opacity: 0.45;
+}
+.self-btn.solid {
+  background: #111;
+  color: #fff;
+  width: 100%;
+}
+.self-paths {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+.self-path-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 0.6rem;
+  align-items: center;
+}
+.self-path-row.at-risk {
+  outline: 1px dashed #111;
+  padding: 0.25rem;
+}
+.self-path-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.82rem;
+}
+.self-path-track {
+  height: 0.55rem;
+  background: #e6e6e6;
+}
+.self-path-fill {
+  height: 100%;
+  background: #4d4d4d;
+}
+.self-main {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1rem;
+}
+.self-section {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+.self-grid-wrap {
+  overflow-x: auto;
+}
+.self-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.self-grid th,
+.self-grid td {
+  border: 1px solid #ccc;
+  padding: 0.35rem;
+  text-align: center;
+  min-width: 4.5rem;
+}
+.self-grid th.impact {
+  border-top: 3px solid #111;
+}
+.impact-tag {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.self-grid td.fog {
+  background: repeating-linear-gradient(
+    -45deg,
+    #fff,
+    #fff 4px,
+    #e8e8e8 4px,
+    #e8e8e8 8px
+  );
+}
+.self-grid td.gap {
+  outline: 2px solid #111;
+  outline-offset: -2px;
+}
+.cell-big {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.cell-meta {
+  font-size: 0.68rem;
+  opacity: 0.85;
+}
+.self-milestones {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.ms-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+}
+.ms-track {
+  height: 0.4rem;
+  background: #e6e6e6;
+  margin-top: 0.25rem;
+}
+.ms-fill {
+  height: 100%;
+  background: #111;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+.self-side {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+.self-card {
+  border: 1px solid #111;
+  padding: 0.85rem;
+}
+.self-card h4 {
+  margin: 0 0 0.5rem;
+}
+.gap-item {
+  margin-bottom: 0.65rem;
+  font-size: 0.88rem;
+}
+.fb-log {
+  list-style: none;
+  padding: 0;
+  margin: 0.65rem 0 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+.inbox-block {
+  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--line);
+}
+.inbox-card {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(212, 101, 74, 0.06);
+}
+.inbox-title {
+  font-weight: 700;
+}
+.inbox-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+.tie-dots {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+.tie-dots i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  display: inline-block;
+}
+.tie-dots i.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+@media (max-width: 860px) {
+  .self-ready,
+  .self-main,
+  .self-path-row {
+    grid-template-columns: 1fr;
+  }
+}
