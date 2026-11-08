@@ -131,6 +131,43 @@ export const MILESTONE_SPECS: Partial<Record<GradeId, MilestoneSpec[]>> = {
       actions: ['chartership-log', 'cpd-friday', 'peer-check'],
     },
   ],
+  seniorTechnician: [
+    {
+      id: 'leadModel',
+      label: 'Lead a discipline model',
+      path: 'technical',
+      target: 8,
+      actions: ['model-layouts', 'clash-cycle', 'drawing-set'],
+    },
+    {
+      id: 'trainTech',
+      label: 'Train a technician',
+      path: 'leadership',
+      target: 4,
+      actions: ['mentor-junior', 'peer-check', 'ask-mentor'],
+    },
+    {
+      id: 'clashFree',
+      label: 'Deliver a clash-free floor',
+      path: 'collaboration',
+      target: 6,
+      actions: ['clash-cycle', 'work-across'],
+    },
+    {
+      id: 'automate',
+      label: 'Automate one repetitive task',
+      path: 'technical',
+      target: 3,
+      actions: ['automate'],
+    },
+    {
+      id: 'tenderSet',
+      label: 'Issue a tender set on time',
+      path: 'delivery',
+      target: 6,
+      actions: ['drawing-set', 'timesheets'],
+    },
+  ],
 }
 
 export function milestonesFor(grade: GradeId): MilestoneSpec[] {

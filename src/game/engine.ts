@@ -28,11 +28,12 @@ import {
   defaultTies,
   enforceRoleModelCap,
   gainGridEvidence,
+  growthNeedFor,
   monthInCycle,
   rateCard,
   revealPriorityCell,
 } from './progress'
-import { canPromoteEarly, canPromoteNormal } from './promotion'
+import { canPromoteNormal } from './promotion'
 import type {
   ActionDef,
   CardDef,
@@ -456,6 +457,7 @@ export function pathActionEvidence(state: GameState): Record<PathId, { label: st
     leadership: [
       { label: 'Ask Up', count: n('ask-mentor') },
       { label: 'Support Down', count: n('mentor-junior') },
+      { label: 'Peer drawing check', count: n('peer-check') },
       { label: 'CPD', count: n('cpd-friday') },
     ].filter((x) => x.count > 0),
     commitment: [
@@ -912,10 +914,19 @@ function crisisForPath(grade: GradeId, path: PathId): string {
   if (path === 'commitment') return 'corner-cut'
   const table: Record<string, Partial<Record<PathId, string>>> = {
     graduate: { collaboration: 'island-mentality', leadership: 'silent-struggle', commitment: 'corner-cut' },
-    engineer: { delivery: 'late-alarm', technical: 'my-way-only', commitment: 'corner-cut' },
+    engineer: {
+      delivery: 'late-alarm',
+      technical: 'my-way-only',
+      collaboration: 'island-mentality',
+      commitment: 'corner-cut',
+    },
     senior: { delivery: 'isolated-verdict', leadership: 'problem-spotter', commitment: 'corner-cut' },
     associate: { delivery: 'unclaimed-helm', leadership: 'command-without-trust', commitment: 'corner-cut' },
-    technician: { collaboration: 'guesswork-geometry', commitment: 'corner-cut' },
+    technician: {
+      delivery: 'issue-day',
+      collaboration: 'guesswork-geometry',
+      commitment: 'corner-cut',
+    },
     seniorTechnician: { delivery: 'revision-drift', commitment: 'corner-cut' },
     bimLead: { leadership: 'standards-for-their-own-sake', commitment: 'corner-cut' },
   }
@@ -1033,12 +1044,7 @@ export function finishReview(state: GameState): GameState {
     return next
   }
 
-  if (canPromoteEarly(next)) {
-    next.screen = 'promotion'
-    pushLog(next, 'Milestone route: early promotion review.', 'good')
-    return next
-  }
-
+  // Early route is opt-in from Self (Request early promotion) — not auto after Review
   next.screen = 'cards'
   if (next.crises.length) {
     const hints = next.crises
@@ -1097,8 +1103,9 @@ export function promote(state: GameState, keepHabitId?: string): GameState {
   next.milestonesHit = []
   next.milestoneProgress = {}
   next.crises = []
-  // Soft-reset Growth — carry 30% so the next grade is a real chase again
-  const carried = Math.floor(next.growthBanked * 0.3)
+  // Soft-reset Growth — carry ≤30% and always below the next grade's need
+  const nextNeed = growthNeedFor(nextId)
+  const carried = Math.min(Math.floor(next.growthBanked * 0.3), Math.max(0, nextNeed - 1))
   next.growthBanked = carried
   next.resources.growth = carried
   next.celebrationSlots = 1

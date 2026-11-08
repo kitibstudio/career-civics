@@ -85,6 +85,7 @@ export default function App() {
           onPlanGaps={() => dispatch({ type: 'screen', screen: 'desk' })}
           onCharterBody={(body) => dispatch({ type: 'charterBody', body })}
           onCharterReview={() => dispatch({ type: 'charterReview' })}
+          onRequestEarly={() => dispatch({ type: 'screen', screen: 'promotion' })}
         />
       )}
 

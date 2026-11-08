@@ -79,6 +79,7 @@ export function rateCard(
     score +=
       (counts['ask-mentor'] ?? 0) +
       (counts['mentor-junior'] ?? 0) +
+      (counts['peer-check'] ?? 0) +
       (counts['cpd-friday'] ?? 0) +
       (counts['ask-feedback'] ?? 0) +
       (counts['chartership-log'] ?? 0)

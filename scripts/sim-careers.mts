@@ -21,6 +21,7 @@ import {
   resolveInbox,
   toggleCard,
 } from '../src/game/engine.ts'
+import { canPromoteEarly } from '../src/game/promotion.ts'
 import type { GameState, PathId } from '../src/data/types.ts'
 
 /** Deterministic PRNG so runs are comparable. */
@@ -259,6 +260,10 @@ function handleScreens(state: GameState, rng: () => number): GameState {
     }
     if (s.screen === 'review') {
       s = finishReview(s)
+      // Autopilot “requests” early when eligible (players use Self button)
+      if (s.screen === 'cards' && canPromoteEarly(s)) {
+        s = { ...s, screen: 'promotion' }
+      }
       continue
     }
     if (s.screen === 'promotion') {

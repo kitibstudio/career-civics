@@ -48,17 +48,24 @@ export function SelfScreen({
   onPlanGaps,
   onCharterBody,
   onCharterReview,
+  onRequestEarly,
 }: {
   state: GameState
   onAskFeedback?: () => void
   onPlanGaps?: () => void
   onCharterBody?: (body: CharterBody) => void
   onCharterReview?: () => void
+  onRequestEarly?: () => void
 }) {
   const grade = GRADES[state.grade]
   const character = CHARACTERS.find((c) => c.id === state.characterId)
   const ready = promotionReady(state)
-  const blockers = ready.blockers ?? []
+  const visibleBlockers = ready.blockers.filter((b) => {
+    if (ready.earlyOk && (b.id === 'tenure' || b.id === 'milestones-early' || b.id === 'blind-spot-early'))
+      return false
+    if (ready.ready && b.id.startsWith('milestones-early')) return false
+    return true
+  })
   const gaps = topGaps(state, 3)
   const specs = milestonesFor(state.grade)
   const growthNeed = growthNeedFor(state.grade)
@@ -98,7 +105,11 @@ export function SelfScreen({
         <div className="self-ready desk-ready">
           <div>
             <h3 className="self-ready-status">
-              {ready.ready ? 'Ready for promotion' : 'Not yet ready'}
+              {ready.ready
+                ? 'Ready for promotion'
+                : ready.earlyOk
+                  ? 'Early route open'
+                  : 'Not yet ready'}
             </h3>
             <p className="muted">{ready.reason}</p>
           </div>
@@ -118,34 +129,38 @@ export function SelfScreen({
             <div>
               Crisis in play: <strong>{state.crises.length ? state.crises.length : 'None'}</strong>
             </div>
-            <button className="btn btn-ghost self-early-btn" disabled={!ready.earlyOk} type="button">
+            <button
+              className="btn btn-ghost self-early-btn"
+              disabled={!ready.earlyOk || !onRequestEarly}
+              type="button"
+              onClick={() => onRequestEarly?.()}
+            >
               {ready.earlyOk
                 ? 'Request early promotion'
                 : `Early promotion · ${ready.earlyMissing || 'locked'}`}
             </button>
             <p className="muted" style={{ fontSize: '0.78rem', margin: 0 }}>
               Normal promo needs month {ready.minMonths}+ in grade. Early: month{' '}
-              {ready.minMonthsEarly}+, 3 milestones, Technical or Delivery at M1
-              {isGradOrTech ? '' : ', and Professional Review if leaving Engineer'}.
+              {ready.minMonthsEarly}+, 3 milestones (incl. blind-spot ones), Technical or Delivery at
+              M1
+              {isGradOrTech ? '' : ', and Professional Review if leaving Engineer'}. Early no longer
+              auto-fires after Review — request it here.
             </p>
           </div>
         </div>
 
-        {!ready.ready && blockers.length > 0 && (
+        {!ready.ready && !ready.earlyOk && visibleBlockers.length > 0 && (
           <div className="promo-blockers">
             <p className="eyebrow" style={{ color: 'var(--signal)', marginBottom: '0.35rem' }}>
               Why you can’t promote yet
             </p>
             <ul>
-              {blockers
-                .filter((b) => !b.id.startsWith('milestones-early') || !ready.ready)
-                .slice(0, 6)
-                .map((b) => (
-                  <li key={b.id}>
-                    <strong>{b.label}</strong>
-                    <span className="muted"> — {b.fix ?? b.detail}</span>
-                  </li>
-                ))}
+              {visibleBlockers.slice(0, 6).map((b) => (
+                <li key={b.id}>
+                  <strong>{b.label}</strong>
+                  <span className="muted"> — {b.fix ?? b.detail}</span>
+                </li>
+              ))}
             </ul>
           </div>
         )}
@@ -423,9 +438,9 @@ export function SelfScreen({
               })}
             </ul>
             <p className="muted">
-              3 of {specs.length} is only one early-promotion requirement — also need month{' '}
-              {ready.minMonths}+, a passed gate, and Growth ≥ ~40% of target. Base grade timer is{' '}
-              {timer ?? 'open'} months.
+              Early needs month {ready.minMonthsEarly}+, 3 milestones (incl. blind-spot set), a passed
+              gate, and Growth ≥ ~50% of target. Normal needs month {ready.minMonths}+. Base grade
+              timer is {timer ?? 'open'} months.
             </p>
           </div>
         </div>

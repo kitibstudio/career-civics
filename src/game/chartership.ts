@@ -123,10 +123,21 @@ export function runProfessionalReview(state: GameState): {
   ensureChartership(state)
   const weak = weakestElements(state.elementStrength, 3)
   const notes: string[] = []
-  const body = state.charterBody === 'engineersIreland' ? 'Engineers Ireland' : 'CIBSE / IET'
-  notes.push(`Two AI interviewers (${body}) probe your three weakest elements: ${weak.join(', ')}.`)
-  if (state.charterBody === 'engineersIreland') {
-    notes.push('Interview opens with a 10-minute presentation built from chosen episodes.')
+  if (state.discipline === 'architect') {
+    notes.push(
+      'Part 3 / professional practice exam skin — two examiners probe practice, law and management against your weakest UK-SPEC-mapped elements: ' +
+        weak.join(', ') +
+        '.',
+    )
+    notes.push(
+      'ARB Part 3 / RIBA flavour: case study presentation and oral — same evidence bar as Engineering Professional Review for Senior unlock.',
+    )
+  } else {
+    const body = state.charterBody === 'engineersIreland' ? 'Engineers Ireland' : 'CIBSE / IET'
+    notes.push(`Two AI interviewers (${body}) probe your three weakest elements: ${weak.join(', ')}.`)
+    if (state.charterBody === 'engineersIreland') {
+      notes.push('Interview opens with a 10-minute presentation built from chosen episodes.')
+    }
   }
   if (state.sponsor.tieStrength < 1) {
     notes.push('Sponsor tie is weak — they struggle to endorse your report.')
