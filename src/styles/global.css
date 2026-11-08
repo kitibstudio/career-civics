@@ -1311,7 +1311,7 @@ a {
 .ladder-steps {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 0.9rem;
+  gap: 0.25rem 1.6rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1328,7 +1328,7 @@ a {
 .ladder-steps li + li::before {
   content: '→';
   position: absolute;
-  left: -0.75rem;
+  left: -1.15rem;
   opacity: 0.6;
 }
 

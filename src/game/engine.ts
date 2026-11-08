@@ -860,7 +860,7 @@ export function computeReviewBreakdown(state: GameState): ReviewBreakdown {
     const n = PATH_FEEDING_ACTIONS[p].reduce((s, id) => s + (actionCounts[id] ?? 0), 0)
     if (n > 0) {
       lines[p].push({
-        label: `${n} ${PATH_LABELS[p]} action${n === 1 ? '' : 's'} scored nothing — no ${PATH_LABELS[p]} card slotted`,
+        label: `${n} ${PATH_LABELS[p]} action${n === 1 ? '' : 's'} earned no card points — no ${PATH_LABELS[p]} card slotted`,
         amount: 0,
         kind: 'hint',
       })
