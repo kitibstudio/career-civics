@@ -14,6 +14,8 @@ import {
 } from '../data/ukSpec'
 import type { CharterBody, GameState, SkillId } from '../data/types'
 import { PathBars } from '../components/PathBars'
+import { CareerLadder } from '../components/CareerLadder'
+import { ReviewHistory } from '../components/ReviewHistory'
 import {
   canAttemptProfessionalReview,
   cpdProgress,
@@ -167,6 +169,21 @@ export function SelfScreen({
       </div>
 
       <div className="desk-grid">
+        <div className="panel" style={{ padding: '1.1rem' }}>
+          <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+            Career ladder
+          </p>
+          <CareerLadder state={state} />
+        </div>
+        <div className="panel" style={{ padding: '1.1rem' }}>
+          <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
+            Review history · trajectory
+          </p>
+          <ReviewHistory state={state} />
+        </div>
+      </div>
+
+      <div className="desk-grid">
         <div className="stack">
           <div className="panel" style={{ padding: '1.1rem' }}>
             <p className="eyebrow" style={{ color: 'var(--cyan-deep)' }}>
@@ -177,6 +194,8 @@ export function SelfScreen({
               grade={state.grade}
               reviewsDone={state.reviewsDone}
               monthInCycle={cycleMonth}
+              delta={state.lastReview?.pathDelta}
+              deltaLabel="last Review"
             />
           </div>
 

@@ -66,7 +66,7 @@ function emptyPaths(): PathScores {
   return { delivery: 0, technical: 0, collaboration: 0, leadership: 0, commitment: 0 }
 }
 
-function commitmentRequired(grade: GradeId): boolean {
+export function commitmentRequired(grade: GradeId): boolean {
   return ['engineer', 'senior', 'associate', 'seniorTechnician', 'bimLead', 'leadCoordinator'].includes(
     grade,
   )
@@ -766,7 +766,15 @@ export interface ReviewBreakdown {
   neglect: Record<PathId, NeglectRisk>
 }
 
-const PATH_FEEDING_ACTIONS: Record<PathId, string[]> = {
+/** Path a slotted card's mentor points land on (specialisms → Technical, cross → Collaboration). */
+export function cardScoringPath(card: CardDef): PathId | null {
+  if (card.kind === 'crisis') return null
+  if (card.kind === 'cross') return 'collaboration'
+  if (card.kind === 'specialism') return 'technical'
+  return card.path === 'crisis' ? 'technical' : card.path
+}
+
+export const PATH_FEEDING_ACTIONS: Record<PathId, string[]> = {
   delivery: ['drawing-set', 'design-review', 'timesheets'],
   technical: ['calc-package', 'model-layouts', 'automate', 'cpd-friday', 'learn-revit'],
   collaboration: ['work-across', 'client-meeting', 'clash-cycle', 'lunch-learn', 'site-visit'],
