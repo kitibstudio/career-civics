@@ -42,6 +42,7 @@ const PERSONA_WEIGHTS: Record<
   { id: string; w: number }[]
 > = {
   aisha: [
+    { id: 'internal-meeting', w: 0.8 },
     { id: 'calc-package', w: 5 },
     { id: 'drawing-set', w: 2 },
     { id: 'design-review', w: 2 },
@@ -59,6 +60,7 @@ const PERSONA_WEIGHTS: Record<
     {     id: 'automate', w: 0.2 }, // avoid Black Box softlock
   ],
   rohan: [
+    { id: 'internal-meeting', w: 0.8 },
     { id: 'site-visit', w: 4 },
     { id: 'drawing-set', w: 3 },
     { id: 'work-across', w: 2.5 },
@@ -75,6 +77,7 @@ const PERSONA_WEIGHTS: Record<
     { id: 'carbon-option', w: 0.6 },
   ],
   maya: [
+    { id: 'internal-meeting', w: 0.8 },
     { id: 'client-meeting', w: 3.5 },
     { id: 'lunch-learn', w: 3 },
     { id: 'design-review', w: 2.5 },
@@ -92,6 +95,7 @@ const PERSONA_WEIGHTS: Record<
     { id: 'carbon-option', w: 0.8 },
   ],
   sam: [
+    { id: 'internal-meeting', w: 0.8 },
     { id: 'model-layouts', w: 4 },
     { id: 'drawing-set', w: 3 },
     { id: 'clash-cycle', w: 2 },

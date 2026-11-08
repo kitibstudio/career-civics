@@ -41,6 +41,9 @@ export function ReviewScreen({
   if (lines) {
     const idle = lines.delivery.find((l) => l.kind === 'idle')
     if (idle) takeaways.push(`${idle.label} cost ${fmtSigned(idle.amount)} Delivery. Spend those hours on real work next cycle.`)
+    const overhead = lines.delivery.find((l) => l.kind === 'overhead' && l.amount < 0)
+    if (overhead)
+      takeaways.push(`${overhead.label} cost ${fmtSigned(overhead.amount)} Delivery. Keep internal meetings to the allowance.`)
     for (const p of PATH_ORDER) {
       const hint = lines[p].find((l) => l.kind === 'hint')
       if (hint) takeaways.push(`${hint.label}. Slot a ${PATH_LABELS[p]} card so that work counts.`)

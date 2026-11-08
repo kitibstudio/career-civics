@@ -41,6 +41,7 @@ export function DeskScreen({
   const monthPlan = monthPlanYieldDeltas(state)
   const projection = projectReview(state)
   const idleThisCycle = projection.breakdown.idleBlocks
+  const overhead = projection.breakdown.overhead
   const emptySlots = Math.max(0, slots - state.slotted.length)
   const [hoverPreview, setHoverPreview] = useState<Partial<Record<keyof Resources, number>> | null>(
     null,
@@ -164,7 +165,10 @@ export function DeskScreen({
                 <motion.button
                   key={action.id}
                   className={`action-row${used > 0 ? ' action-row-used' : ''}${
-                    action.id === 'unutilized' ? ' action-row-warn' : ''
+                    action.id === 'unutilized' ||
+                    (action.id === 'internal-meeting' && overhead.blocks >= overhead.allowance)
+                      ? ' action-row-warn'
+                      : ''
                   }`}
                   disabled={!affordable}
                   onClick={() => onAction(action.id)}
@@ -196,6 +200,20 @@ export function DeskScreen({
                         −1 Delivery path at Review per block
                         {idleThisCycle ? ` · already −${idleThisCycle} this cycle` : ''}. Prefer any
                         real action if you have one.
+                      </div>
+                    )}
+                    {action.id === 'internal-meeting' && (
+                      <div
+                        className={
+                          overhead.blocks >= overhead.allowance ? 'action-warn-banner' : 'action-overhead-note'
+                        }
+                      >
+                        Overhead {overhead.blocks}/{overhead.allowance} this cycle · non-billable
+                        {overhead.blocks >= overhead.allowance
+                          ? ` · beyond this every 2 blocks cost −1 Delivery${
+                              overhead.deliveryCost ? ` (already −${overhead.deliveryCost})` : ''
+                            }`
+                          : ' · no path cost within allowance'}
                       </div>
                     )}
                     <div className="action-blurb">{action.blurb}</div>

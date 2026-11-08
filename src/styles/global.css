@@ -1639,6 +1639,10 @@ a {
   font-style: italic;
 }
 
+.path-lines .pl-overhead {
+  color: var(--steel);
+}
+
 .path-lines .pl-idle,
 .path-lines .pl-neglect,
 .path-lines .pl-crisis {
@@ -1698,6 +1702,13 @@ a {
 .action-row-warn {
   border-color: rgba(212, 101, 74, 0.4);
   background: rgba(212, 101, 74, 0.05);
+}
+
+.action-overhead-note {
+  margin: 0.2rem 0 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--steel);
 }
 
 .action-warn-banner {
