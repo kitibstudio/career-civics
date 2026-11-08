@@ -8,12 +8,15 @@ import type { GameState, Resources } from '../data/types'
 import { FoundingCharter } from '../components/FoundingCharter'
 import { PathExplain } from '../components/PathExplain'
 import { YieldStrip } from '../components/YieldStrip'
+import { CyclePreview } from '../components/CyclePreview'
+import { FocusPanel } from '../components/FocusPanel'
 import { INBOX_POOL } from '../data/inbox'
 import {
   actionYieldPreview,
   canAfford,
   monthActions,
   monthPlanYieldDeltas,
+  projectReview,
   slotCount,
   timesUsedThisMonth,
 } from '../game/engine'
@@ -36,6 +39,9 @@ export function DeskScreen({
   const project = state.projects[0]
   const slots = slotCount(state)
   const monthPlan = monthPlanYieldDeltas(state)
+  const projection = projectReview(state)
+  const idleThisCycle = projection.breakdown.idleBlocks
+  const emptySlots = Math.max(0, slots - state.slotted.length)
   const [hoverPreview, setHoverPreview] = useState<Partial<Record<keyof Resources, number>> | null>(
     null,
   )
@@ -51,9 +57,23 @@ export function DeskScreen({
       />
 
       {!state.tipSeen && (
-        <div className="tip" style={{ color: 'var(--paper)' }}>
-          <strong>How a month works:</strong> −8h blocks stack. Clear the Inbox before deadlines.
-          Wellbeing ≤ {state.wellbeingFloor} triggers Burnout. Tap ? on paths for M1/M2 help.
+        <div className="tip onboarding" style={{ color: 'var(--paper)' }}>
+          <strong>How a career works</strong>
+          <ol>
+            <li>
+              <strong>Each month</strong> spend 160h on −8h action blocks. Clear the Inbox before
+              deadlines. Wellbeing ≤ {state.wellbeingFloor} triggers Burnout.
+            </li>
+            <li>
+              <strong>Every 6 months a Review</strong> scores five paths. Actions count through your{' '}
+              <strong>slotted cards</strong>: a Delivery card turns drawing work into Delivery
+              points. <strong>Unutilized</strong> blocks cost −1 Delivery each.
+            </li>
+            <li>
+              <strong>Promotion</strong> = time in grade + the gate passed at two Reviews running +
+              enough Growth. “Next best moves” below tracks all three.
+            </li>
+          </ol>
           <div style={{ marginTop: '0.6rem' }}>
             <button className="btn btn-primary" onClick={onDismissTip}>
               Got it
@@ -61,6 +81,15 @@ export function DeskScreen({
           </div>
         </div>
       )}
+
+      <div className="desk-grid">
+        <div className="panel" style={{ padding: '1.1rem' }}>
+          <FocusPanel state={state} projection={projection} />
+        </div>
+        <div className="panel" style={{ padding: '1.1rem' }}>
+          <CyclePreview state={state} projection={projection} />
+        </div>
+      </div>
 
       <div className="desk-grid">
         <div className="panel" style={{ padding: '1.1rem' }}>
@@ -134,7 +163,9 @@ export function DeskScreen({
               return (
                 <motion.button
                   key={action.id}
-                  className={`action-row${used > 0 ? ' action-row-used' : ''}`}
+                  className={`action-row${used > 0 ? ' action-row-used' : ''}${
+                    action.id === 'unutilized' ? ' action-row-warn' : ''
+                  }`}
                   disabled={!affordable}
                   onClick={() => onAction(action.id)}
                   onMouseEnter={() => {
@@ -160,6 +191,13 @@ export function DeskScreen({
                         </span>
                       )}
                     </div>
+                    {action.id === 'unutilized' && (
+                      <div className="action-warn-banner">
+                        −1 Delivery path at Review per block
+                        {idleThisCycle ? ` · already −${idleThisCycle} this cycle` : ''}. Prefer any
+                        real action if you have one.
+                      </div>
+                    )}
                     <div className="action-blurb">{action.blurb}</div>
                     <ActionYields state={state} action={action} />
                   </div>
@@ -178,8 +216,9 @@ export function DeskScreen({
             <span className="muted" style={{ alignSelf: 'center', fontSize: '0.88rem' }}>
               Next review in {6 - ((state.monthInGrade - 1) % 6)} month(s)
               {state.resources.hours >= 8
-                ? ` · ${Math.floor(state.resources.hours / 8)} unutilized block(s) still available`
+                ? ` · ${state.resources.hours}h unspent — use them on actions before ending the month`
                 : ''}
+              {idleThisCycle ? ` · Unutilized ×${idleThisCycle} this cycle = −${idleThisCycle} Delivery` : ''}
             </span>
           </div>
         </div>
@@ -240,6 +279,12 @@ export function DeskScreen({
                 <h3 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>Slotted cards</h3>
               </div>
             </div>
+            {emptySlots > 0 && (
+              <p className="slot-callout">
+                {emptySlots} of {slots} slot{slots === 1 ? '' : 's'} empty — an empty slot scores
+                nothing at Review. Fill it on Cards.
+              </p>
+            )}
             <div className="stack">
               {state.slotted.map((id) => {
                 const card = CARD_BY_ID[id]

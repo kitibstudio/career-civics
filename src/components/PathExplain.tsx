@@ -39,9 +39,10 @@ export function PathExplain({ state }: { state: GameState }) {
         <details className="score-recipe">
           <summary>How path scores work (Review recipe)</summary>
           <p>
-            Bar numbers are <strong>path totals this grade</strong> (e.g. 3 / {cfg.m2} = current / M2).
+            Bar numbers are <strong>path points this grade</strong> (M1 {cfg.m1}, M2 {cfg.m2}).
             Points add only at Review: base +{cfg.base}, slotted cards × mentor rating, milestones,
-            −1 Delivery per Unutilized block, crisis penalties.
+            −1 Delivery per Unutilized block, crisis penalties. “If the Review were today” above
+            itemises the current cycle.
           </p>
           {last && (
             <p className="last-review-delta">

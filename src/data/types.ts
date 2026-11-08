@@ -300,6 +300,25 @@ export interface LogEntry {
   tone?: 'neutral' | 'good' | 'warn' | 'bad'
 }
 
+export type PathLineKind =
+  | 'base'
+  | 'card'
+  | 'lineage'
+  | 'commitment'
+  | 'milestone'
+  | 'idle'
+  | 'crisis'
+  | 'neglect'
+  | 'morale'
+  | 'hint'
+
+/** One itemised contribution to a path's Review delta (hint lines carry amount 0). */
+export interface PathLine {
+  label: string
+  amount: number
+  kind: PathLineKind
+}
+
 export interface ReviewSnapshot {
   turn: number
   ratings: Record<string, Rating>
@@ -310,6 +329,23 @@ export interface ReviewSnapshot {
   gatePass: boolean
   moralePenalty: boolean
   notes: string[]
+  /** Absent on saves made before itemised breakdowns existed. */
+  pathLines?: Record<PathId, PathLine[]>
+  slotsUsed?: number
+  slotsMax?: number
+}
+
+export interface CareerHistoryEntry {
+  kind: 'review' | 'promotion'
+  turn: number
+  grade: GradeId
+  monthInGrade: number
+  pathTotals?: PathScores
+  pathDelta?: PathScores
+  gatePass?: boolean
+  streak?: number
+  growthBanked?: number
+  toGrade?: GradeId
 }
 
 export interface GameState {
@@ -351,6 +387,8 @@ export interface GameState {
   positiveFeedbackThisReview: boolean
   reviewsDone: number
   lastReview: ReviewSnapshot | null
+  /** Reviews and promotions across the whole career, oldest first. */
+  careerHistory: CareerHistoryEntry[]
   log: LogEntry[]
   tipSeen: boolean
   software: { autocad: boolean; revit: boolean }

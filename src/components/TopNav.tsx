@@ -1,6 +1,7 @@
 import type { GameState, ScreenId } from '../data/types'
 import { GRADES } from '../data/grades'
 import { CHARACTERS } from '../data/characters'
+import { CareerLadderStrip } from './CareerLadder'
 
 const TABS: { id: ScreenId; label: string }[] = [
   { id: 'desk', label: 'Desk' },
@@ -29,36 +30,39 @@ export function TopNav({
   }
 
   return (
-    <div className="topbar">
-      <div>
-        <div className="eyebrow">Career Civics</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.15rem' }}>
-          {character?.name} · {grade.name}
-        </div>
-        <div className="muted" style={{ fontSize: '0.85rem', color: 'var(--mist)' }}>
-          Month {state.turn} · Review {(Math.floor((state.monthInGrade - 1) / 6) % 10) + 1} in grade
-        </div>
-      </div>
-      <div className="topbar-actions">
-        {!locked && (
-          <div className="nav-pills" role="tablist" aria-label="Screens">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                className={`nav-btn ${state.screen === tab.id ? 'active' : ''}`}
-                onClick={() => onScreen(tab.id)}
-                role="tab"
-                aria-selected={state.screen === tab.id}
-              >
-                {tab.label}
-              </button>
-            ))}
+    <>
+      <div className="topbar">
+        <div>
+          <div className="eyebrow">Career Civics</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.15rem' }}>
+            {character?.name} · {grade.name}
           </div>
-        )}
-        <button className="btn btn-ghost nav-restart" type="button" onClick={handleNewCareer}>
-          New career
-        </button>
+          <div className="muted" style={{ fontSize: '0.85rem', color: 'var(--mist)' }}>
+            Career month {state.turn} · {state.reviewsDone} Review{state.reviewsDone === 1 ? '' : 's'} done
+          </div>
+        </div>
+        <div className="topbar-actions">
+          {!locked && (
+            <div className="nav-pills" role="tablist" aria-label="Screens">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`nav-btn ${state.screen === tab.id ? 'active' : ''}`}
+                  onClick={() => onScreen(tab.id)}
+                  role="tab"
+                  aria-selected={state.screen === tab.id}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button className="btn btn-ghost nav-restart" type="button" onClick={handleNewCareer}>
+            New career
+          </button>
+        </div>
       </div>
-    </div>
+      <CareerLadderStrip state={state} />
+    </>
   )
 }

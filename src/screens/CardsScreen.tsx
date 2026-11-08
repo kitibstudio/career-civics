@@ -2,7 +2,8 @@ import { CARD_BY_ID } from '../data/cards'
 import { deskifyCardText } from '../data/deskNames'
 import { PATH_LABELS } from '../data/grades'
 import type { GameState } from '../data/types'
-import { availableCards, slotCount } from '../game/engine'
+import { availableCards, cardScoringPath, slotCount } from '../game/engine'
+import { PATH_ORDER } from '../data/grades'
 
 export function CardsScreen({
   state,
@@ -15,6 +16,11 @@ export function CardsScreen({
 }) {
   const cards = availableCards(state)
   const max = slotCount(state)
+  const empty = Math.max(0, max - state.slotted.length)
+  const carded = new Set(
+    state.slotted.map((id) => (CARD_BY_ID[id] ? cardScoringPath(CARD_BY_ID[id]) : null)),
+  )
+  const uncovered = PATH_ORDER.filter((p) => p !== 'commitment' && !carded.has(p))
 
   return (
     <section className="screen">
@@ -37,6 +43,19 @@ export function CardsScreen({
           )}
         </div>
 
+        {empty > 0 && (
+          <p className="slot-callout">
+            {empty} of {max} slot{max === 1 ? '' : 's'} empty — an empty slot scores nothing at Review.
+          </p>
+        )}
+        {uncovered.length > 0 && (
+          <p className="muted" style={{ fontSize: '0.88rem' }}>
+            No card on: <strong>{uncovered.map((p) => PATH_LABELS[p]).join(', ')}</strong>. Actions on
+            those paths score nothing at Review, and paths left unfed for several Reviews draw Drift
+            or a Crisis. (Commitment scores from desk work directly.)
+          </p>
+        )}
+
         <div className="card-grid">
           {cards.map((card) => {
             const on = state.slotted.includes(card.id)
@@ -57,6 +76,11 @@ export function CardsScreen({
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
                     {on ? 'SLOTTED' : 'slot'}
                   </span>
+                </div>
+                <div className="muted" style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>
+                  {cardScoringPath(card)
+                    ? `Scores ${PATH_LABELS[cardScoringPath(card)!]} at Review`
+                    : 'Penalises paths until cleared'}
                 </div>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem' }}>
                   {card.name}
